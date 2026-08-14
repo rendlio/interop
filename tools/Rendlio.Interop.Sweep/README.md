@@ -99,9 +99,19 @@ appear, and what has it done since.
 A line that cannot be read stops the run. Skipping it would be worse: the candidate on that
 line would read as a new arrival every week for as long as the line stayed there.
 
+**The previous run is the last block appended, not the last identifier used.** `--run` exists
+so a run can be replayed or repeated after failing partway, and doing that against the same
+ledger appends a second block under the same name. Reading by name alone would then hand the
+next run both blocks at once — every candidate twice, plus everything the first attempt saw
+and the replay did not. So a block is bounded by the pair every record of one run shares, its
+identifier and the moment it read the registries, and a replay therefore **supersedes** the
+attempt before it. Both blocks stay on disk; superseding is a rule about reading, not a
+deletion. If a set handed to the diff still carries one candidate twice — a ledger edited by
+hand, say — the run stops and says which candidate, rather than ending in a stack trace.
+
 ## The diff
 
-The previous run is the last run in the ledger. This run is compared against it, and the
+The previous run is the last block in the ledger. This run is compared against it, and the
 report names three things:
 
 - **new** — an identity the previous run did not have.

@@ -81,6 +81,24 @@ public sealed class RecipeAndRunnerTests
     }
 
     [Fact]
+    public void A_pattern_that_does_not_compile_fails_validation_and_not_only_the_run()
+    {
+        // Validation is what a caller reaches for to ask whether a recipe is sound, and an
+        // expression that will not compile is the commonest way one is not. Leaving it to the
+        // runner would mean a recipe could be validated, pass, and then fail on use.
+        SweepException failure = Assert.Throws<SweepException>(() => SweepRecipe.Parse(
+            """
+            {
+              "name": "a-recipe",
+              "queries": [ { "id": "q1", "source": "Npm", "term": "x" } ],
+              "patterns": [ { "id": "p1", "expression": "(unclosed" } ]
+            }
+            """));
+
+        Assert.Contains("p1", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_pattern_that_is_not_an_expression_is_refused_when_the_scanner_is_built()
     {
         SweepException failure = Assert.Throws<SweepException>(
@@ -204,6 +222,22 @@ public sealed class RecipeAndRunnerTests
     {
         Assert.Throws<SweepException>(
             () => SweepOptions.Parse(["--recipe", "r", "--ledger", "l", "--publish", "yes"], When));
+    }
+
+    [Theory]
+    [InlineData("--recipe")]
+    [InlineData("--ledger")]
+    [InlineData("--run")]
+    public void An_option_given_twice_is_refused(string repeated)
+    {
+        // Quietly keeping the last would let a job write somewhere nobody reads from, for
+        // weeks, without saying anything.
+        string[] all = ["--recipe", "r", "--ledger", "l", "--run", "id"];
+
+        SweepException failure = Assert.Throws<SweepException>(
+            () => SweepOptions.Parse([.. all, repeated, "again"], When));
+
+        Assert.Contains(repeated, failure.Message, StringComparison.Ordinal);
     }
 
     [Fact]

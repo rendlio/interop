@@ -83,13 +83,24 @@ internal static class RegistryJson
     /// The named timestamp, normalized to UTC so two runs on machines in different places
     /// cannot disagree about whether a candidate moved.
     /// </summary>
+    /// <remarks>
+    /// <c>AssumeUniversal</c> is the part that makes that true, and it is not spare. Some of
+    /// these registries publish a timestamp with no zone designator at all — PyPI's
+    /// <c>upload_time</c> is one — and .NET reads an undesignated time as the machine's own.
+    /// <c>AdjustToUniversal</c> alone would then faithfully convert a value that had already
+    /// been misread, and the same unchanged project would date differently on two machines.
+    /// Since <c>updated</c> is a compared field, that is a run reporting a change that did not
+    /// happen, every week, on every row that took this path. Registry timestamps are UTC
+    /// whether or not they say so, and this is where that gets said.
+    /// </remarks>
     public static DateTimeOffset? Time(JsonElement element, string name)
     {
+        const DateTimeStyles AsUtc = DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal;
+
         string? text = Text(element, name);
 
         return text is not null
-            && DateTimeOffset.TryParse(
-                text, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal, out DateTimeOffset time)
+            && DateTimeOffset.TryParse(text, CultureInfo.InvariantCulture, AsUtc, out DateTimeOffset time)
             ? time
             : null;
     }

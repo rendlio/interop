@@ -29,8 +29,20 @@ try
         new GitHubSource(transport),
     ]);
 
+    // Ctrl+C unwinds the run rather than killing it mid-request. The transport already tells a
+    // cancellation the caller asked for apart from a registry that stopped answering; without
+    // something to cancel with, that distinction had nothing to distinguish.
+    using CancellationTokenSource stopping = new();
+    Console.CancelKeyPress += (_, interrupt) =>
+    {
+        interrupt.Cancel = true;
+        stopping.Cancel();
+    };
+
     DateTimeOffset observedUtc = DateTimeOffset.UtcNow;
-    IReadOnlyList<Observation> observed = await runner.CollectAsync(recipe).ConfigureAwait(false);
+    IReadOnlyList<Observation> observed = await runner
+        .CollectAsync(recipe, stopping.Token)
+        .ConfigureAwait(false);
     IReadOnlyList<Observation> previous = CandidateLedger.LatestRun(CandidateLedger.Read(options.LedgerPath));
 
     SweepDiff diff = SweepDiff.Between(previous, observed, recipe.Sensitivity);
@@ -49,6 +61,13 @@ try
 catch (SweepException error)
 {
     Console.Error.WriteLine(error.Message);
+
+    return 1;
+}
+catch (OperationCanceledException)
+{
+    // Interrupted before the ledger was written, so the run left nothing half-recorded.
+    Console.Error.WriteLine("Stopped before the run finished. Nothing was written.");
 
     return 1;
 }

@@ -51,6 +51,18 @@ public sealed class SweepDiffTests
     }
 
     [Fact]
+    public void A_previous_run_carrying_one_candidate_twice_fails_as_a_sentence()
+    {
+        // A run records each candidate once, so a repeat means the input is not one run. The
+        // reason this is checked rather than left to the dictionary build is what a job running
+        // unattended should leave behind when its input is wrong: a line, not a stack trace.
+        SweepException failure = Assert.Throws<SweepException>(
+            () => SweepDiff.Between([Sighting.Of("alpha"), Sighting.Of("alpha")], []));
+
+        Assert.Contains("crates.io:alpha", failure.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void A_candidate_the_previous_run_did_not_have_is_an_entrant()
     {
         SweepDiff diff = SweepDiff.Between(

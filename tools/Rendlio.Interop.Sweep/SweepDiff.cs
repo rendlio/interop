@@ -56,8 +56,7 @@ public sealed record SweepDiff
 
         SweepSensitivity thresholds = sensitivity ?? new SweepSensitivity();
 
-        Dictionary<string, Observation> before = previous.ToDictionary(
-            observation => observation.Id, StringComparer.Ordinal);
+        Dictionary<string, Observation> before = Index(previous);
 
         List<Observation> entrants = [];
         List<ObservationChange> changes = [];
@@ -146,6 +145,32 @@ public sealed record SweepDiff
         }
 
         return report.ToString();
+    }
+
+    /// <summary>
+    /// Keys the previous run by identity, refusing a set that carries one twice.
+    /// </summary>
+    /// <remarks>
+    /// A run records each candidate once, so a repeat means the input is not one run — a
+    /// hand-edited ledger, or two appends written under one stamp. Building the index with
+    /// <c>ToDictionary</c> would end that in an <c>ArgumentException</c> nothing catches,
+    /// which for a job that runs unattended is a stack trace where a sentence belongs.
+    /// </remarks>
+    private static Dictionary<string, Observation> Index(IReadOnlyList<Observation> previous)
+    {
+        Dictionary<string, Observation> index = new(StringComparer.Ordinal);
+
+        foreach (Observation observation in previous)
+        {
+            if (!index.TryAdd(observation.Id, observation))
+            {
+                throw new SweepException(
+                    $"The previous run carries {observation.Id} twice. A run records each "
+                    + "candidate once, so the ledger holds more than one run under a single stamp.");
+            }
+        }
+
+        return index;
     }
 
     private static void Compare(

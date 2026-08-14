@@ -50,9 +50,6 @@ public sealed class ClaimScanner
         }
     }
 
-    /// <summary>Whether there is anything to scan for.</summary>
-    public bool IsEmpty => patterns.Length == 0;
-
     /// <summary>Runs the patterns over one candidate.</summary>
     /// <param name="text">Everything the registry publishes about it.</param>
     /// <returns>The ids that matched, sorted, so two runs order them the same way.</returns>

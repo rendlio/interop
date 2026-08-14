@@ -134,8 +134,12 @@ public sealed record SweepRecipe
             }
         }
 
+        // Taken once. A document spelling "patterns": null deserializes to null however the
+        // property is annotated, and the compile step below needs the same list this loop saw.
+        IReadOnlyList<ClaimPattern> patterns = Patterns ?? [];
+
         HashSet<string> patternIds = new(StringComparer.Ordinal);
-        foreach (ClaimPattern pattern in Patterns ?? [])
+        foreach (ClaimPattern pattern in patterns)
         {
             if (string.IsNullOrWhiteSpace(pattern.Id))
             {
@@ -147,6 +151,11 @@ public sealed record SweepRecipe
                 throw new SweepException($"Recipe '{Name}' uses the pattern id '{pattern.Id}' twice.");
             }
         }
+
+        // Compiling them is the rest of the check, and it belongs here rather than only in the
+        // runner: this method is what a caller reaches for to ask whether a recipe is sound,
+        // and an expression that will not compile is the commonest way one is not.
+        _ = new ClaimScanner(patterns);
     }
 
     /// <summary>

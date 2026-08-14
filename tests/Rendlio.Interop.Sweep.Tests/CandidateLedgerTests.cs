@@ -62,6 +62,56 @@ public sealed class CandidateLedgerTests : IDisposable
     }
 
     [Fact]
+    public void A_replay_under_a_reused_run_id_supersedes_rather_than_compounds()
+    {
+        // The documented reason --run exists is to replay a run or repeat one that failed
+        // partway, and doing that against the same ledger appends a second block under the
+        // same id. Selecting by id alone would hand the next run both blocks: every candidate
+        // twice. Nothing downstream can join two runs on an identity that is no longer unique.
+        CandidateLedger.Append(
+            Ledger, CandidateLedger.Stamp("run-1", Stamped, [Sighting.Of("alpha"), Sighting.Of("beta")]));
+
+        CandidateLedger.Append(
+            Ledger, CandidateLedger.Stamp("run-1", Replayed, [Sighting.Of("alpha"), Sighting.Of("gamma")]));
+
+        IReadOnlyList<Observation> previous = CandidateLedger.LatestRun(CandidateLedger.Read(Ledger));
+
+        Assert.Equal(["crates.io:alpha", "crates.io:gamma"], previous.Select(observation => observation.Id));
+    }
+
+    [Fact]
+    public void A_run_that_replays_is_still_a_run_the_next_one_can_be_compared_against()
+    {
+        // The end of the same story: the replayed block is what the next run diffs against,
+        // and it does so without anything having been rewritten.
+        CandidateLedger.Append(Ledger, CandidateLedger.Stamp("run-1", Stamped, [Sighting.Of("alpha")]));
+        CandidateLedger.Append(Ledger, CandidateLedger.Stamp("run-1", Replayed, [Sighting.Of("alpha")]));
+
+        SweepDiff diff = SweepDiff.Between(
+            CandidateLedger.LatestRun(CandidateLedger.Read(Ledger)), [Sighting.Of("alpha")]);
+
+        Assert.True(diff.IsEmpty);
+
+        // Both blocks are still on disk. Superseding is a reading rule, not a deletion.
+        Assert.Equal(2, File.ReadAllLines(Ledger).Length);
+    }
+
+    [Fact]
+    public void An_older_block_under_the_same_run_id_is_not_pulled_back_in()
+    {
+        // A re-used id further back in the file belongs to a different run, whatever it is
+        // called. Everything that block saw and the last one did not would otherwise arrive as
+        // candidates that had gone missing.
+        CandidateLedger.Append(Ledger, CandidateLedger.Stamp("run-1", Stamped, [Sighting.Of("alpha")]));
+        CandidateLedger.Append(Ledger, CandidateLedger.Stamp("run-2", Replayed, [Sighting.Of("beta")]));
+        CandidateLedger.Append(Ledger, CandidateLedger.Stamp("run-1", Later, [Sighting.Of("gamma")]));
+
+        Assert.Equal(
+            ["crates.io:gamma"],
+            CandidateLedger.LatestRun(CandidateLedger.Read(Ledger)).Select(observation => observation.Id));
+    }
+
+    [Fact]
     public void The_previous_run_comes_back_ordered_however_it_was_written()
     {
         CandidateLedger.Append(
@@ -132,6 +182,10 @@ public sealed class CandidateLedgerTests : IDisposable
 
     private static readonly DateTimeOffset Stamped =
         new(2026, 8, 27, 6, 0, 0, TimeSpan.Zero);
+
+    private static readonly DateTimeOffset Replayed = Stamped.AddHours(1);
+
+    private static readonly DateTimeOffset Later = Stamped.AddHours(2);
 
     public void Dispose()
     {

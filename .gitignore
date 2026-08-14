@@ -43,5 +43,9 @@ Thumbs.db
 
 # What a watch run records. The ledger and its reports are working evidence for whoever
 # reads them, not content this repository publishes, so they stay out of its history too.
+# The extension is covered repository-wide rather than only under the default path, because
+# the path is an argument and a run can be pointed anywhere. Fixtures are put back: a test
+# that needs a recorded ledger is source, not evidence.
 *.jsonl
 sweep-runs/
+!tests/**/*.jsonl

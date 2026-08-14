@@ -45,13 +45,13 @@ public sealed record SweepOptions(string RecipePath, string LedgerPath, string R
             switch (name)
             {
                 case "--recipe":
-                    recipe = value;
+                    recipe = Once(recipe, name, value);
                     break;
                 case "--ledger":
-                    ledger = value;
+                    ledger = Once(ledger, name, value);
                     break;
                 case "--run":
-                    run = value;
+                    run = Once(run, name, value);
                     break;
                 default:
                     throw new SweepException($"{name} is not an option. {Usage}");
@@ -75,6 +75,14 @@ public sealed record SweepOptions(string RecipePath, string LedgerPath, string R
             ledger,
             string.IsNullOrWhiteSpace(run) ? Stamp(utcNow) : run);
     }
+
+    /// <summary>
+    /// Takes an option's value, refusing a second one. Quietly keeping the last would make
+    /// <c>--ledger a --ledger b</c> write somewhere the caller did not read from, which is the
+    /// kind of thing a scheduled job does for weeks before anyone notices.
+    /// </summary>
+    private static string Once(string? already, string name, string value) =>
+        already is null ? value : throw new SweepException($"{name} was given twice. {Usage}");
 
     /// <summary>A run identifier that sorts and reads as the moment the run started.</summary>
     public static string Stamp(DateTimeOffset utcNow) =>

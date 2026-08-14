@@ -85,9 +85,19 @@ public static class CandidateLedger
     }
 
     /// <summary>
-    /// What the previous run saw. The file is append-only, so the last run in it is the last
-    /// run written, and its records are the ones a diff compares against.
+    /// What the previous run saw: the last block of records appended to the file.
     /// </summary>
+    /// <remarks>
+    /// The run identifier alone does not answer this, because a caller may re-use one — the
+    /// documented reason <c>--run</c> exists is to replay a run or repeat one that failed
+    /// partway, and doing that against the same ledger appends a second block under the same
+    /// id. Selecting by id would then return both blocks at once: the same candidate twice,
+    /// plus anything the first block saw and the replay did not. So the block is bounded by
+    /// the pair the whole of one append shares — its id and the moment it read the registries
+    /// — which <see cref="Stamp"/> puts on every record of a run and which a later append
+    /// under a re-used id does not match. A replay therefore supersedes rather than compounds,
+    /// which is what a replay means, and it does so without rewriting a line.
+    /// </remarks>
     /// <param name="records">The ledger, as <see cref="Read"/> returned it.</param>
     /// <returns>That run, ordered by identity; empty when the ledger is.</returns>
     public static IReadOnlyList<Observation> LatestRun(IReadOnlyList<SweepRecord> records)
@@ -99,15 +109,25 @@ public static class CandidateLedger
             return [];
         }
 
-        string latest = records[^1].Run;
+        SweepRecord last = records[^1];
+        int start = records.Count - 1;
+
+        while (start > 0 && SameAppend(records[start - 1], last))
+        {
+            start--;
+        }
 
         return
         [
-            .. records.Where(record => string.Equals(record.Run, latest, StringComparison.Ordinal))
+            .. records.Skip(start)
                 .Select(record => record.Observation)
                 .OrderBy(observation => observation.Id, StringComparer.Ordinal),
         ];
     }
+
+    private static bool SameAppend(SweepRecord record, SweepRecord last) =>
+        string.Equals(record.Run, last.Run, StringComparison.Ordinal)
+        && record.ObservedUtc == last.ObservedUtc;
 
     /// <summary>Appends a run to the ledger, creating the file and its directory if needed.</summary>
     /// <param name="path">The ledger file.</param>

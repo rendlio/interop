@@ -140,6 +140,45 @@ public sealed class RegistrySourceTests
         Assert.Equal(new DateTimeOffset(2026, 8, 12, 8, 0, 0, TimeSpan.Zero), project.Updated);
     }
 
+    /// <summary>
+    /// The same release, dated the two ways PyPI dates one. <c>upload_time_iso_8601</c> carries
+    /// a zone designator and <c>upload_time</c> does not, and the second is the fallback the
+    /// projection uses when the first is absent.
+    /// </summary>
+    private const string PyPiUndesignatedDatePayload =
+        """
+        {"info":{"name":"sample-project","version":"0.9.1"},
+         "urls":[{"upload_time":"2026-08-12T08:00:00"}]}
+        """;
+
+    private const string PyPiDesignatedDatePayload =
+        """
+        {"info":{"name":"sample-project","version":"0.9.1"},
+         "urls":[{"upload_time_iso_8601":"2026-08-12T08:00:00Z"}]}
+        """;
+
+    [Fact]
+    public async Task A_timestamp_with_no_zone_on_it_is_still_read_as_utc()
+    {
+        // Registry timestamps are UTC whether or not they say so. Read as machine-local, an
+        // unchanged project would date differently on two machines, and since updated is a
+        // compared field that is a run reporting a change that did not happen — every week,
+        // on every row that took the fallback.
+        //
+        // Note what this can and cannot catch: on a machine already at UTC the two readings
+        // coincide and this passes either way. It bites everywhere else, which is most
+        // developer machines and any run that crosses a DST boundary.
+        Observation undesignated = await Collected(PyPiUndesignatedDatePayload);
+        Observation designated = await Collected(PyPiDesignatedDatePayload);
+
+        Assert.Equal(designated.Updated, undesignated.Updated);
+        Assert.Equal(new DateTimeOffset(2026, 8, 12, 8, 0, 0, TimeSpan.Zero), undesignated.Updated);
+    }
+
+    private static async Task<Observation> Collected(string payload) =>
+        Assert.Single(await new PyPiSource(new RecordingTransport(payload))
+            .CollectAsync(Query(SweepSource.PyPi, "sample-project"), default));
+
     [Fact]
     public async Task Pypi_treats_a_name_that_is_not_there_as_an_ordinary_answer()
     {
