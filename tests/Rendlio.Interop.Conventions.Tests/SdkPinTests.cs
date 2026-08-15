@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using Xunit;
@@ -40,6 +41,13 @@ public sealed partial class SdkPinTests
 
     /// <summary>The page a contributor reads before their first build.</summary>
     private const string ContributorPage = "README.md";
+
+    /// <summary>
+    /// The extension of a page somebody reads. The rule that scans for a band the pin no
+    /// longer names reads these and not source, because a fixture's own cases name bands on
+    /// purpose and a rule that reddened on its own test data would be one nobody could keep.
+    /// </summary>
+    private const string PageExtension = ".md";
 
     /// <summary>
     /// The roll-forward policies that cannot leave the feature band the version names. A patch
@@ -322,6 +330,83 @@ public sealed partial class SdkPinTests
         Assert.True(fromPin == 1, $"Read {fromPin} readings of the pin where one is written.");
     }
 
+    [Fact]
+    public void No_page_names_a_feature_band_other_than_the_pinned_one()
+    {
+        // The rule above asks that the band appears somewhere, and cannot see a second band
+        // that also appears. Both failures have one cause: moving the pin and updating one
+        // sentence out of two. What is left behind still reads as an instruction, so a
+        // contributor who finds the stale sentence installs a band this repository refuses and
+        // gets a build that stops naming a version nothing they read mentioned. Every shipped
+        // page is scanned rather than only the one, because the sentence that goes stale is
+        // whichever page somebody was not looking at.
+        string band = FeatureBand(
+            Assert.IsType<string>(ReadPin(RepositoryLayout.ReadFile(PinFileName)).Version));
+
+        List<string> mentions = [];
+        List<string> violations = [];
+
+        foreach (string path in RepositoryLayout.EnumerateShippedFiles())
+        {
+            if (!PageExtension.Equals(Path.GetExtension(path), StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            foreach (Match mention in BandPattern().Matches(File.ReadAllText(path)))
+            {
+                string named = $"{RepositoryLayout.Describe(path)} names \"{mention.Value}\"";
+                mentions.Add(named);
+
+                if (!string.Equals(mention.Value, band, StringComparison.Ordinal))
+                {
+                    violations.Add(named);
+                }
+            }
+        }
+
+        // Guards the assertion below, which a scan that had stopped finding bands at all — a
+        // pattern that no longer matches how one is spelled, an enumeration that no longer
+        // reaches the pages — would satisfy while reading nothing.
+        Assert.NotEmpty(mentions);
+
+        Assert.True(
+            violations.Count == 0,
+            $"{string.Join("; ", violations)}, but {PinFileName} pins \"{band}\". A page left "
+            + "naming the band the pin used to hold still reads as the one to install.");
+    }
+
+    [Fact]
+    public void The_SDK_that_builds_this_repository_resolves_inside_the_pinned_band()
+    {
+        // Every rule above reads the pin. This one reads what the pin produces, which is a
+        // different question and the only one that can catch the file having stopped being the
+        // one that decides: moved out of the root, shadowed by a second global.json nearer the
+        // projects, or answered by a preview that allowPrerelease was opened up to admit. Each
+        // of those leaves text these rules pass on while a build resolves something else — the
+        // exact shape of the split this file exists to close.
+        string pinned = Assert.IsType<string>(ReadPin(RepositoryLayout.ReadFile(PinFileName)).Version);
+        (int ExitCode, string Output) resolved = AskTheMuxerItsVersion();
+
+        // A muxer that could not satisfy the pin says so and names the version it wanted,
+        // which is the message worth reporting — of far more use than a band comparison
+        // against whatever an unsuccessful run left on the pipe.
+        Assert.True(
+            resolved.ExitCode == 0,
+            $"Asking the SDK its version from the repository root exited with "
+            + $"{resolved.ExitCode}, so nothing here resolved {PinFileName}: {resolved.Output}");
+
+        // Reported rather than thrown out of the middle of FeatureBand below, because the way
+        // this actually arrives is a prerelease label — the one answer no released band gives.
+        Assert.True(
+            ExactVersionPattern().IsMatch(resolved.Output),
+            $"The SDK building this repository reports \"{resolved.Output}\", which is not an "
+            + $"exact SDK version and so belongs to no released feature band, where "
+            + $"{PinFileName} names \"{pinned}\".");
+
+        Assert.Equal(FeatureBand(pinned), FeatureBand(resolved.Output));
+    }
+
     /// <summary>
     /// What the pin says, as the three fields that decide which SDK a build gets. A null field
     /// is one the file leaves out, which is never the same as one it sets: the SDK supplies its
@@ -488,4 +573,50 @@ public sealed partial class SdkPinTests
     /// <summary>A step input that decides the SDK version somewhere other than the pin.</summary>
     [GeneratedRegex(@"(?m)^\s*dotnet-version:")]
     private static partial Regex OwnVersionPattern();
+
+    /// <summary>
+    /// What the SDK answers when asked its version from the repository root, and how the
+    /// invocation ended. The working directory is the whole point: an SDK looks for
+    /// <c>global.json</c> from there upwards, so asking from anywhere else answers a question
+    /// about the machine rather than about this repository — the same trap that fails a build
+    /// started outside the checkout with errors in files nobody touched.
+    /// </summary>
+    private static (int ExitCode, string Output) AskTheMuxerItsVersion()
+    {
+        ProcessStartInfo start = new()
+        {
+            FileName = Toolchain.DotnetMuxer(),
+            WorkingDirectory = RepositoryLayout.Root.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+        };
+
+        start.ArgumentList.Add("--version");
+
+        // So the answer is the version and nothing else. Both are set in the workflows for the
+        // same reason; here a banner would arrive as a version that matches no band.
+        start.Environment["DOTNET_NOLOGO"] = "true";
+        start.Environment["DOTNET_SKIP_FIRST_TIME_EXPERIENCE"] = "true";
+
+        using Process muxer = Process.Start(start)
+            ?? throw new InvalidOperationException("Could not start the SDK muxer.");
+
+        // Drain both pipes before waiting, for the reason the other fixtures that run a
+        // process do: one filled while nobody reads it blocks for ever rather than failing.
+        Task<string> output = muxer.StandardOutput.ReadToEndAsync();
+        Task<string> error = muxer.StandardError.ReadToEndAsync();
+        muxer.WaitForExit();
+
+        return (muxer.ExitCode, (output.Result + error.Result).Trim());
+    }
+
+    /// <summary>
+    /// A feature band as a page spells one: an exact version with the two patch digits written
+    /// <c>xx</c>, which is the form the SDK's own documentation uses and the form nothing else
+    /// in a page is numbered with — a package version is never written this way, so a match
+    /// here is always somebody telling a reader which SDK to install.
+    /// </summary>
+    [GeneratedRegex(@"\d+\.\d+\.\dxx")]
+    private static partial Regex BandPattern();
 }
