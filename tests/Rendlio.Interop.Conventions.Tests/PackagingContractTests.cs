@@ -28,6 +28,14 @@ namespace Rendlio.Interop.Conventions.Tests;
 /// placeholder on a public package page nor a public member a consumer's IntelliSense has nothing
 /// to say about can be taken back by editing it later, because the version that carried it stays
 /// published.
+///
+/// The warning policy is run here for the same reason. Warnings are errors, with the four audit
+/// codes exempted, and that exemption is only defensible because a workflow drops it again with a
+/// command-line <c>-p:WarningsNotAsErrors=</c>. Whether a command line really does outrank an
+/// exemption written in a props file is a fact about MSBuild rather than about this repository,
+/// and the whole arrangement rests on it, so it is run rather than assumed — with <c>CS1591</c>
+/// standing in for an advisory code, which cannot be raised without a vulnerable package and a
+/// network to learn about it from.
 /// </summary>
 public sealed class PackagingContractTests
 {
@@ -36,6 +44,15 @@ public sealed class PackagingContractTests
 
     private const string RealDescription =
         "Bridges the FooSheet upstream onto the Rendlio Sheets model.";
+
+    /// <summary>
+    /// The promoted warning that stands in for an advisory code. Any would do; this one is
+    /// already raised by <see cref="UndocumentedPublicType"/> and needs no package to produce.
+    /// </summary>
+    private const string ExemptibleWarning = "CS1591";
+
+    /// <summary>What a workflow passes to drop the exemption for the length of its own run.</summary>
+    private const string DropExemption = "-p:WarningsNotAsErrors=";
 
     /// <summary>
     /// A public type with nothing said about it — what a contributor writes by accident, and
@@ -182,6 +199,51 @@ public sealed class PackagingContractTests
         Assert.True(result.Succeeded, $"Build should have succeeded:\n{result.Output}");
     }
 
+    [Fact]
+    public void A_warning_a_props_file_exempts_does_not_fail_the_build()
+    {
+        // Half of the audit arrangement, and the half that makes the other half mean
+        // something: an exemption written as an append to WarningsNotAsErrors keeps a
+        // promoted warning from failing a build. Without this, the test below would be
+        // satisfied by a build that never promoted the warning in the first place.
+        using Probe probe = new(
+            description: RealDescription,
+            source: UndocumentedPublicType,
+            exemptWarning: ExemptibleWarning);
+
+        PackResult result = probe.Build();
+
+        Assert.True(result.Succeeded, $"Build should have succeeded:\n{result.Output}");
+    }
+
+    [Fact]
+    public void An_exemption_is_dropped_by_emptying_it_on_the_command_line()
+    {
+        // What the audit workflow is built on. The exemption in Directory.Build.props is
+        // written as an append to whatever the property already held, so whether emptying it
+        // on the command line clears that or is merged into it decides whether the job can
+        // fail at all. Were the file to outrank the command line, the audit would run green
+        // for ever while reporting on nothing — which is the one failure a scheduled job
+        // cannot be relied on to surface, because nobody reads a job that is passing.
+        //
+        // A second probe rather than a second build of the one above: the same project built
+        // twice is incremental, so the compiler would not rerun and the warning would not be
+        // reissued. The assertion would then hold for a reason that has nothing to do with
+        // the flag.
+        using Probe probe = new(
+            description: RealDescription,
+            source: UndocumentedPublicType,
+            exemptWarning: ExemptibleWarning);
+
+        PackResult result = probe.Build(DropExemption);
+
+        Assert.False(result.Succeeded, $"Build should have failed but succeeded:\n{result.Output}");
+
+        // As an error specifically. The warning is still reported either way, so matching the
+        // bare code would pass against the exempted build this is meant to differ from.
+        Assert.Contains($"error {ExemptibleWarning}", result.Output, StringComparison.Ordinal);
+    }
+
     /// <summary>A nuspec metadata field, looked up by local name because the nuspec is namespaced.</summary>
     private static string? Field(XElement metadata, string name) =>
         metadata.Elements().FirstOrDefault(child => child.Name.LocalName == name)?.Value;
@@ -197,10 +259,23 @@ public sealed class PackagingContractTests
         private const string ProjectName = "PackagingProbe";
 
         public Probe(
-            string? description, bool packable = true, bool withReadme = true, string? source = null)
+            string? description,
+            bool packable = true,
+            bool withReadme = true,
+            string? source = null,
+            string? exemptWarning = null)
         {
             Root = Path.Combine(Path.GetTempPath(), $"rendlio-pack-{Guid.NewGuid():N}");
             Directory.CreateDirectory(Root);
+
+            // Written the way this repository writes its own — appended to whatever the property
+            // already holds, after the import that supplies it — because how the exemption is
+            // spelled is precisely what the command-line flag has to overrule.
+            string exemption = exemptWarning is null
+                ? string.Empty
+                : "  <PropertyGroup>\n"
+                    + $"    <WarningsNotAsErrors>$(WarningsNotAsErrors);{exemptWarning}</WarningsNotAsErrors>\n"
+                    + "  </PropertyGroup>\n";
 
             // What position under src/ gives a real adapter. Imported explicitly rather than left
             // to discovery, so that nothing above the temporary directory can join the build.
@@ -210,6 +285,7 @@ public sealed class PackagingContractTests
                 Path.Combine(Root, "Directory.Build.props"),
                 "<Project>\n"
                 + $"  <Import Project=\"{shared}\" />\n"
+                + exemption
                 + "</Project>\n");
 
             List<string> properties = ["    <TargetFramework>net10.0</TargetFramework>"];
@@ -251,8 +327,10 @@ public sealed class PackagingContractTests
         /// <summary>
         /// The same project without the packing step, for a claim about what the compiler does
         /// with the settings under <c>src/</c> rather than about what ends up in a package.
+        /// <paramref name="arguments"/> reach MSBuild as they would from a workflow, which is
+        /// the only way to state a claim about what a command line overrules.
         /// </summary>
-        public PackResult Build() => Run("build");
+        public PackResult Build(params string[] arguments) => Run("build", arguments);
 
         private PackResult Run(string verb, params string[] arguments)
         {

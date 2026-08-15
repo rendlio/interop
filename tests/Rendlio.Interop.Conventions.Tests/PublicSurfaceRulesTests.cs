@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Xunit;
 
@@ -105,6 +106,38 @@ public sealed partial class PublicSurfaceRulesTests
 
         Assert.DoesNotContain(names, name =>
             name.EndsWith("packages.lock.json", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public void The_scan_reaches_nothing_this_repository_does_not_track()
+    {
+        // What a repository publishes is what it tracks, which is what RepositoryLayout says
+        // it enumerates. Saying it and doing it came apart once already: the set used to come
+        // from a walk of the working tree, and a walk counts a scratch file nobody committed
+        // as published — so an unrelated note left beside the solution reddens these fixtures
+        // on one machine while CI, which only ever has the checkout, stays green. Nothing
+        // else here would notice a walk coming back, because on a clean checkout the two
+        // answers agree; the difference only shows on the machine of whoever hits it.
+        //
+        // Asked of git directly rather than through the helper that produced the set: a set
+        // compared against the code that built it agrees with itself whatever that code does.
+        string[] tracked = TrackedPaths();
+        List<string> scanned =
+            [.. RepositoryLayout.EnumerateShippedFiles().Select(RepositoryLayout.Describe)];
+
+        // Guards the assertion below, which an enumeration that had stopped finding anything
+        // would satisfy while describing nothing.
+        Assert.NotEmpty(scanned);
+
+        string[] untracked = [.. scanned.Where(name => !tracked.Contains(name, StringComparer.Ordinal))];
+
+        Assert.True(
+            untracked.Length == 0,
+            "These are scanned as published but git does not track them: "
+            + $"{string.Join(", ", untracked)}.{Environment.NewLine}"
+            + "What this repository publishes is what it tracks, so the enumeration comes from "
+            + "the index rather than from a walk of the working tree. A walk reads whatever "
+            + "happens to be on one machine, which is not what anybody else receives.");
     }
 
     [Fact]
@@ -232,6 +265,41 @@ public sealed partial class PublicSurfaceRulesTests
         }
 
         AssertClean(offenders, rule);
+    }
+
+    /// <summary>
+    /// The paths git tracks, repository-relative and forward-slashed as git writes them, for
+    /// a fixture that has to know what is tracked without asking the code under test.
+    /// Separated by NUL so that a name git would otherwise quote and escape arrives whole.
+    /// </summary>
+    private static string[] TrackedPaths()
+    {
+        ProcessStartInfo start = new("git")
+        {
+            WorkingDirectory = RepositoryLayout.Root.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        start.ArgumentList.Add("ls-files");
+        start.ArgumentList.Add("-z");
+
+        using Process git = Process.Start(start)
+            ?? throw new InvalidOperationException(
+                "Could not start 'git'. What this repository publishes is what it tracks, so "
+                + "this fixture has to run from a checkout with git available.");
+
+        // Drain both pipes before waiting: the listing is long enough to fill one, and a
+        // process blocked on a pipe nobody is reading would hang rather than fail.
+        Task<string> listing = git.StandardOutput.ReadToEndAsync();
+        Task<string> failure = git.StandardError.ReadToEndAsync();
+        git.WaitForExit();
+
+        Assert.True(
+            git.ExitCode == 0,
+            $"'git ls-files' exited with {git.ExitCode}: {failure.Result.Trim()}");
+
+        return listing.Result.Split('\0', StringSplitOptions.RemoveEmptyEntries);
     }
 
     private static IEnumerable<string> Scannable(IReadOnlyList<string> files) =>
