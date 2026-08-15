@@ -27,6 +27,7 @@ adapter landing here has to follow.
 | `NuGet.config` | Restore resolves from nuget.org only, so an upstream is always the published package. |
 | `.github/workflows/ci.yml` | Build and test on every push and pull request. |
 | `.github/workflows/audit.yml` | The weekly dependency audit — the one check the build deliberately does not fail on. |
+| `SECURITY.md` | Where a suspected vulnerability goes instead of the issue tracker, and what happens after. |
 | `SUPPORT.md` | What is in scope here, how a bug is routed, and what a response looks like. |
 | `UPSTREAM-PATCHES.md` | How a bug in an upstream library becomes a pull request there, and what is never attached to one. |
 
@@ -147,6 +148,9 @@ you can expect afterwards.
 Once a bug has been told apart and it turns out to be upstream, the [upstream patches
 policy](UPSTREAM-PATCHES.md) takes over: which of those bugs we fix ourselves, how the pull
 request is sent, and the rule that nothing — no request, no cash — is ever attached to it.
+
+A suspected vulnerability goes through neither of those. It goes privately, by the route
+the [security policy](SECURITY.md) gives, and never into a public issue.
 
 ## Licence
 

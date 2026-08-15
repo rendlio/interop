@@ -106,6 +106,9 @@ report and asks where to send it — no detail, no reproduction, no file. An iss
 nothing more than that discloses nothing, and it comes back with somewhere private to send
 the rest. A missing button is never a reason to publish the details.
 
+The [security policy](SECURITY.md) says the rest: what helps in a report, where a
+vulnerability that is not ours to fix belongs, and what a reporter is never asked for.
+
 ## The rules still decide
 
 Triage does not override the three rules in the [README](README.md#the-rules). Licence
