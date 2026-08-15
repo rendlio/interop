@@ -1,0 +1,21 @@
+<Project>
+
+  <!-- MSBuild stops at the nearest Directory.Build.props, so the repository-wide one
+       has to be chained in explicitly. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props" />
+
+  <PropertyGroup>
+    <IsPackable>false</IsPackable>
+    <IsTestProject>true</IsTestProject>
+    <!-- Declared once for every test project. Test projects are internal to the repository,
+         so they track the SDK in global.json rather than the packages' target frameworks. -->
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup Label="Test stack">
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+</Project>

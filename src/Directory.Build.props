@@ -1,0 +1,25 @@
+<Project>
+
+  <!-- MSBuild stops at the nearest Directory.Build.props, so the repository-wide one
+       has to be chained in explicitly. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props" />
+
+  <PropertyGroup Label="Packaging">
+    <IsPackable>true</IsPackable>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Authors>Rendlio</Authors>
+    <Company>Rendlio</Company>
+    <Copyright>Copyright (c) 2026 rendlio</Copyright>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Public API">
+    <!-- Why: combined with TreatWarningsAsErrors this makes an undocumented public member a
+         build error. IntelliSense is the only documentation a consumer of a package gets. -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

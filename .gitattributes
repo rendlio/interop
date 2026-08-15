@@ -1,0 +1,11 @@
+# Normalise every text file to LF in the repository and in the working tree, so
+# `dotnet format --verify-no-changes` gives the same answer on every platform.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.xlsx binary
+*.xlsm binary
+*.snk binary

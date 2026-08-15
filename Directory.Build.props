@@ -1,0 +1,31 @@
+<Project>
+
+  <PropertyGroup Label="Language">
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Warnings">
+    <!-- Why: this repository ships packages other people compile against. A warning left
+         standing here reappears in a consumer's build, where they cannot fix it. -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+    <!-- Why: formatting is gated by the `dotnet format` verify step in CI, deliberately
+         kept out of the compiler so an editor style preference cannot break a build. -->
+    <EnforceCodeStyleInBuild>false</EnforceCodeStyleInBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Build">
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition=" '$(CI)' == 'true' ">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Label="Packaging">
+    <!-- Nothing packs unless it opts in. src/Directory.Build.props turns this back on, so a
+         project can only ship by being placed under src/. -->
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>

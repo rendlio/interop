@@ -1,0 +1,24 @@
+<Project>
+
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- Why transitive pinning stays OFF: an adapter depends on an UNMODIFIED upstream
+         package, and that includes the dependency graph the upstream resolves for itself.
+         Pinning transitives here would silently change what a consumer gets from the
+         upstream, which is exactly the kind of quiet fork the repository rules forbid. -->
+    <CentralPackageTransitivePinningEnabled>false</CentralPackageTransitivePinningEnabled>
+  </PropertyGroup>
+
+  <!--
+    Upstream adapter dependencies land HERE, as version RANGES, alongside the adapter that
+    needs them. The range covers the certified upstream versions and nothing else; widening
+    it requires a new certification run first. See "Version pinning" in README.md.
+  -->
+
+  <ItemGroup Label="Test stack">
+    <PackageVersion Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
+    <PackageVersion Include="xunit" Version="2.9.3" />
+    <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.0" />
+  </ItemGroup>
+
+</Project>

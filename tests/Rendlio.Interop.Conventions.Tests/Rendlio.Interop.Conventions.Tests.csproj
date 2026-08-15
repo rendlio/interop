@@ -1,0 +1,9 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Target framework and the test stack come from tests/Directory.Build.props. -->
+
+  <PropertyGroup>
+    <RootNamespace>Rendlio.Interop.Conventions.Tests</RootNamespace>
+  </PropertyGroup>
+
+</Project>
