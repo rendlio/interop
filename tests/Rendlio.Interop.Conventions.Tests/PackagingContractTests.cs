@@ -23,9 +23,11 @@ namespace Rendlio.Interop.Conventions.Tests;
 /// under <c>src/</c> would otherwise have given it, and it references no package, so pack needs
 /// no network.
 ///
-/// These cost a few seconds each, against a suite that otherwise finishes in well under one. That
-/// is the price of the question: a placeholder that reaches a public package page cannot be taken
-/// back by editing it later, because the version that carried it stays published.
+/// Every case here starts a build, which is why this fixture is measured in seconds while the
+/// rest of the suite finishes in milliseconds. That is the price of the question: neither a
+/// placeholder on a public package page nor a public member a consumer's IntelliSense has nothing
+/// to say about can be taken back by editing it later, because the version that carried it stays
+/// published.
 /// </summary>
 public sealed class PackagingContractTests
 {
@@ -34,6 +36,29 @@ public sealed class PackagingContractTests
 
     private const string RealDescription =
         "Bridges the FooSheet upstream onto the Rendlio Sheets model.";
+
+    /// <summary>
+    /// A public type with nothing said about it — what a contributor writes by accident, and
+    /// what a consumer would then be shown in IntelliSense: a name and nothing else.
+    /// </summary>
+    private const string UndocumentedPublicType =
+        "namespace Probe;\n"
+        + "\n"
+        + "public sealed class Bridge\n"
+        + "{\n"
+        + "    public static int Rows => 0;\n"
+        + "}\n";
+
+    /// <summary>The same type, documented. Nothing else about it differs.</summary>
+    private const string DocumentedPublicType =
+        "namespace Probe;\n"
+        + "\n"
+        + "/// <summary>Bridges an upstream workbook onto the model.</summary>\n"
+        + "public sealed class Bridge\n"
+        + "{\n"
+        + "    /// <summary>How many rows the bridged sheet has.</summary>\n"
+        + "    public static int Rows => 0;\n"
+        + "}\n";
 
     [Fact]
     public void A_package_that_supplies_no_description_does_not_pack()
@@ -124,6 +149,39 @@ public sealed class PackagingContractTests
         Assert.Contains(archive.Entries, entry => entry.FullName == "README.md");
     }
 
+    [Fact]
+    public void A_public_member_without_documentation_does_not_build()
+    {
+        // The README's Contributing section promises a contributor exactly this, and the
+        // promise is made by two settings meeting: GenerateDocumentationFile under src/
+        // produces the warning, warnings-as-errors repository-wide turns it into a failure.
+        // Either one on its own is silent, and reading the props can only show that both are
+        // written down — not that they still add up.
+        using Probe probe = new(description: RealDescription, source: UndocumentedPublicType);
+
+        PackResult result = probe.Build();
+
+        Assert.False(result.Succeeded, $"Build should have failed but succeeded:\n{result.Output}");
+
+        // The diagnostic by number, rather than any failure at all: a project that could not
+        // restore, or could not find its target framework, also fails a build while saying
+        // nothing whatever about documentation.
+        Assert.Contains("CS1591", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_project_whose_public_members_are_documented_builds()
+    {
+        // Guards the test above, which a probe that could not build anything at all would
+        // satisfy while proving nothing. The only difference between the two projects is the
+        // comments, so this is what makes the other one a statement about documentation.
+        using Probe probe = new(description: RealDescription, source: DocumentedPublicType);
+
+        PackResult result = probe.Build();
+
+        Assert.True(result.Succeeded, $"Build should have succeeded:\n{result.Output}");
+    }
+
     /// <summary>A nuspec metadata field, looked up by local name because the nuspec is namespaced.</summary>
     private static string? Field(XElement metadata, string name) =>
         metadata.Elements().FirstOrDefault(child => child.Name.LocalName == name)?.Value;
@@ -138,7 +196,8 @@ public sealed class PackagingContractTests
     {
         private const string ProjectName = "PackagingProbe";
 
-        public Probe(string? description, bool packable = true, bool withReadme = true)
+        public Probe(
+            string? description, bool packable = true, bool withReadme = true, string? source = null)
         {
             Root = Path.Combine(Path.GetTempPath(), $"rendlio-pack-{Guid.NewGuid():N}");
             Directory.CreateDirectory(Root);
@@ -176,30 +235,46 @@ public sealed class PackagingContractTests
             {
                 File.WriteAllText(Path.Combine(Root, "README.md"), $"# {ProjectName}\n");
             }
+
+            if (source is not null)
+            {
+                File.WriteAllText(Path.Combine(Root, "Bridge.cs"), source);
+            }
         }
 
         private string Root { get; }
 
         private string PackageOutput => Path.Combine(Root, "packages");
 
-        public PackResult Pack()
+        public PackResult Pack() => Run("pack", "--output", PackageOutput);
+
+        /// <summary>
+        /// The same project without the packing step, for a claim about what the compiler does
+        /// with the settings under <c>src/</c> rather than about what ends up in a package.
+        /// </summary>
+        public PackResult Build() => Run("build");
+
+        private PackResult Run(string verb, params string[] arguments)
         {
             ProcessStartInfo start = new()
             {
-                FileName = DotnetMuxer(),
+                FileName = Toolchain.DotnetMuxer(),
                 WorkingDirectory = Root,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
             };
 
-            start.ArgumentList.Add("pack");
+            start.ArgumentList.Add(verb);
             start.ArgumentList.Add(Path.Combine(Root, $"{ProjectName}.csproj"));
             start.ArgumentList.Add("--configuration");
             start.ArgumentList.Add("Release");
-            start.ArgumentList.Add("--output");
-            start.ArgumentList.Add(PackageOutput);
             start.ArgumentList.Add("--nologo");
+
+            foreach (string argument in arguments)
+            {
+                start.ArgumentList.Add(argument);
+            }
 
             // An exported Platform reaches MSBuild as a global property and moves the output, so
             // the package would land somewhere this test does not look. It is inherited from
@@ -235,17 +310,6 @@ public sealed class PackagingContractTests
                 // A build node still holding a handle on the output is not a reason to fail a test
                 // that has already answered its question. The directory is temporary either way.
             }
-        }
-
-        /// <summary>
-        /// The muxer running this test, so the probe builds against the SDK <c>global.json</c>
-        /// pins rather than whichever one happens to come first on PATH.
-        /// </summary>
-        private static string DotnetMuxer()
-        {
-            string? host = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH");
-
-            return !string.IsNullOrEmpty(host) && File.Exists(host) ? host : "dotnet";
         }
     }
 }

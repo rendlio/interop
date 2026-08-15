@@ -15,11 +15,28 @@ public sealed partial class PublicSurfaceRulesTests
     /// <summary>
     /// The scanner's own sources: one has to quote every forbidden term in order to search
     /// for it, the other has to name the private trees in order to prune them. These two
-    /// files are excluded from the scan. Nothing else may be.
+    /// files are excluded from the scan. Nothing else may be — which is why they are named by
+    /// repository-relative path and not by bare file name: a name would exempt any future
+    /// file called <c>RepositoryLayout.cs</c> anywhere in the tree, and an exemption nobody
+    /// asked for is the one way a page could carry forbidden wording past this fixture.
     /// </summary>
     private static readonly string[] ScannerSources =
     [
-        "PublicSurfaceRulesTests.cs", "RepositoryLayout.cs",
+        "tests/Rendlio.Interop.Conventions.Tests/PublicSurfaceRulesTests.cs",
+        "tests/Rendlio.Interop.Conventions.Tests/RepositoryLayout.cs",
+    ];
+
+    /// <summary>
+    /// Files whose whole name is an extension, and whose job is to name paths. An ignore rule
+    /// has to name the private tree in order to keep it out of the history, and
+    /// <c>docs/internal/ export-ignore</c> in <c>.gitattributes</c> is the ordinary way to
+    /// keep it out of a published archive — so the internal-identifier rule cannot apply to
+    /// them without failing a build for doing the right thing. Named one by one rather than
+    /// matched by a leading dot, so that a dotfile added later has to be exempted on purpose.
+    /// </summary>
+    private static readonly string[] PathNamingConfiguration =
+    [
+        ".gitignore", ".gitattributes", ".editorconfig",
     ];
 
     /// <summary>
@@ -91,6 +108,48 @@ public sealed partial class PublicSurfaceRulesTests
     }
 
     [Fact]
+    public void The_scan_excludes_its_own_sources_and_nothing_else()
+    {
+        List<string> shipped = [.. RepositoryLayout.EnumerateShippedFiles().Select(RepositoryLayout.Describe)];
+        List<string> scanned =
+            [.. Scannable(RepositoryLayout.EnumerateShippedFiles()).Select(RepositoryLayout.Describe)];
+
+        foreach (string source in ScannerSources)
+        {
+            // Named by path, so a rename or a move leaves the exemption pointing at nothing.
+            // That fails safe — the scanner's own sources quote every forbidden term, so the
+            // next run is a wall of failures — but a wall of failures is a poor way to learn
+            // that a file moved, and this says it in one line instead.
+            Assert.Contains(source, shipped, StringComparer.Ordinal);
+            Assert.DoesNotContain(source, scanned, StringComparer.Ordinal);
+        }
+
+        // "Nothing else may be": the two sets differ by exactly the two files above.
+        Assert.Equal(shipped.Count - ScannerSources.Length, scanned.Count);
+    }
+
+    [Fact]
+    public void The_internal_identifier_scan_skips_the_files_whose_job_is_to_name_a_path()
+    {
+        List<string> shipped = [.. RepositoryLayout.EnumerateShippedFiles().Select(RepositoryLayout.Describe)];
+        List<string> scanned = [.. ProseAndCode().Select(RepositoryLayout.Describe)];
+
+        foreach (string exempt in PathNamingConfiguration)
+        {
+            // Shipped, or the exemption is about a file that is not there and this test
+            // passes by describing nothing.
+            Assert.Contains(exempt, shipped, StringComparer.Ordinal);
+            Assert.DoesNotContain(exempt, scanned, StringComparer.Ordinal);
+        }
+
+        // And nothing went with them. LICENSE is the one to name: it has no extension, so the
+        // filter this replaced removed it and kept every file it meant to remove.
+        Assert.Contains("README.md", scanned, StringComparer.Ordinal);
+        Assert.Contains("LICENSE", scanned, StringComparer.Ordinal);
+        Assert.Equal(shipped.Count - PathNamingConfiguration.Length, scanned.Count);
+    }
+
+    [Fact]
     public void Shipped_pages_do_not_disclose_how_fidelity_is_measured()
     {
         AssertAbsent(
@@ -134,12 +193,16 @@ public sealed partial class PublicSurfaceRulesTests
     }
 
     /// <summary>
-    /// Prose and code only. Ignore files are excluded because naming a private path is
-    /// exactly what an ignore rule is for.
+    /// Prose and code only: everything shipped except the files whose job is to name paths —
+    /// see <see cref="PathNamingConfiguration"/>. Excluded by role rather than by shape,
+    /// because the shape does not distinguish them: <c>Path.GetExtension(".gitignore")</c>
+    /// returns <c>".gitignore"</c>, so a filter on having an extension keeps every one of
+    /// them and removes only <c>LICENSE</c>.
     /// </summary>
     private static List<string> ProseAndCode() =>
         RepositoryLayout.EnumerateShippedFiles()
-            .Where(path => Path.GetExtension(path).Length > 0)
+            .Where(path => !PathNamingConfiguration.Contains(
+                Path.GetFileName(path), StringComparer.OrdinalIgnoreCase))
             .ToList();
 
     private static void AssertAbsent(IReadOnlyList<string> files, string[] terms, string rule)
@@ -172,7 +235,8 @@ public sealed partial class PublicSurfaceRulesTests
     }
 
     private static IEnumerable<string> Scannable(IReadOnlyList<string> files) =>
-        files.Where(file => !ScannerSources.Contains(Path.GetFileName(file), StringComparer.Ordinal));
+        files.Where(file =>
+            !ScannerSources.Contains(RepositoryLayout.Describe(file), StringComparer.Ordinal));
 
     private static void AssertClean(List<string> offenders, string rule)
     {

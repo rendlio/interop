@@ -1,0 +1,45 @@
+name: audit
+
+# Why this is a workflow of its own rather than a step in ci: the build exempts the audit
+# warnings from warnings-as-errors, so that an advisory published overnight cannot redden a
+# change that has nothing to do with it. That exemption is only defensible while the question
+# is still being asked, so it is asked here — on a schedule, where the answer is about this
+# repository's dependencies rather than about somebody's pull request, and where acting on it
+# is somebody's decision instead of the price of getting unrelated work merged.
+on:
+  schedule:
+    # Weekly. The advisory database moves on its own schedule and nothing here is urgent
+    # enough to poll it daily; a range that has to move waits on a certification run anyway.
+    - cron: '17 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+
+jobs:
+  audit:
+    name: dependency audit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Audit the restored graph
+        # Setting WarningsNotAsErrors empty on the command line drops the repository-wide
+        # exemption for this run only — a command-line property outranks one set in a file —
+        # so NU1901-NU1904 are errors again here and an advisory fails this job.
+        #
+        # --locked-mode for the same reason the ci workflow uses it: the graph worth auditing
+        # is the one that is committed, not whatever a fresh resolution of the ranges produces.
+        run: dotnet restore --locked-mode -p:WarningsNotAsErrors=

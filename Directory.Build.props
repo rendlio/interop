@@ -10,6 +10,16 @@
     <!-- Why: this repository ships packages other people compile against. A warning left
          standing here reappears in a consumer's build, where they cannot fix it. -->
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <!-- Why these four are exempt: NU1901-NU1904 are the audit's report on the advisory
+         database, and that database changes without anyone here committing anything. Left
+         promoted, an advisory published overnight against a transitive upstream turns every
+         build red the next morning — including the build of a change that has nothing to do
+         with it. Worse, the way out is to widen a range, and rule 3 says a range only moves
+         after a certification run, so the red would stand until an unrelated piece of work
+         finished. The audit stays on and stays loud; it just does not get a veto over work it
+         has nothing to say about. The question is instead asked on its own schedule, by
+         .github/workflows/audit.yml, which re-promotes these four and fails on them. -->
+    <WarningsNotAsErrors>$(WarningsNotAsErrors);NU1901;NU1902;NU1903;NU1904</WarningsNotAsErrors>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest-recommended</AnalysisLevel>
     <!-- Why: formatting is gated by the `dotnet format` verify step in CI, deliberately

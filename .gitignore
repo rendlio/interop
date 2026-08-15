@@ -17,6 +17,10 @@ coverage*.info
 # Packages produced locally (never committed - CI publishes)
 *.nupkg
 *.snupkg
+# A feed inside the checkout is for trying a package before it is published. Restore will not
+# find one on its own: NuGet.config clears every source and adds nuget.org alone, deliberately,
+# so that an upstream is always the published package. Consuming from a feed here therefore
+# means naming it - `dotnet add package ... --source ./local-feed`.
 local-feed/
 packages/
 

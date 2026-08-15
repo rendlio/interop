@@ -12,7 +12,12 @@ permissions:
 
 concurrency:
   group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # Only a pull request supersedes itself: a later push to a branch makes the run for the
+  # earlier one pointless. A push to main is not like that. Merges land by fast-forward and
+  # can arrive seconds apart, and cancelling the first leaves a commit on main whose recorded
+  # verdict is "cancelled" — which is not a verdict, on the one branch where the answer has to
+  # exist for every commit.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   DOTNET_NOLOGO: true

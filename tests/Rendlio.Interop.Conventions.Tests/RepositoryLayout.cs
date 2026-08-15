@@ -1,3 +1,5 @@
+using System.Diagnostics;
+
 namespace Rendlio.Interop.Conventions.Tests;
 
 /// <summary>
@@ -9,9 +11,11 @@ internal static class RepositoryLayout
     private const string SolutionFileName = "Rendlio.Interop.slnx";
 
     /// <summary>
-    /// Directory names that never hold shipped content. Build output is excluded because it
-    /// is a copy of the sources; the private working trees are excluded because the
-    /// vocabulary the public rules forbid is legitimate inside them.
+    /// Directory names pruned whatever git says about them. Nothing listed here is normally
+    /// tracked — build output and the private working trees are all ignored — so this is a
+    /// second answer rather than the first one. It covers the case an ignore rule cannot: a
+    /// path added with <c>-f</c> is tracked, and a private note that reached the index would
+    /// otherwise be read under rules written for the pages strangers see.
     /// </summary>
     private static readonly string[] PrunedDirectoryNames =
     [
@@ -46,6 +50,12 @@ internal static class RepositoryLayout
 
     private static readonly Lazy<DirectoryInfo> LazyRoot = new(FindRoot);
 
+    /// <summary>
+    /// Read once. Every fixture here asks the same question of the same commit, and the answer
+    /// costs a process.
+    /// </summary>
+    private static readonly Lazy<IReadOnlyList<string>> LazyShippedFiles = new(ReadShippedFiles);
+
     public static DirectoryInfo Root => LazyRoot.Value;
 
     public static string ReadFile(string relativePath)
@@ -61,45 +71,86 @@ internal static class RepositoryLayout
     }
 
     /// <summary>
-    /// Every file this repository publishes that a person wrote, as absolute paths. Generated
-    /// files are left out — see <see cref="GeneratedFileNames"/>.
+    /// Every file this repository publishes that a person wrote, as absolute paths. The set
+    /// comes from git rather than from a walk of the working tree, because what a repository
+    /// publishes is what it tracks and a walk answers a neighbouring question that is not the
+    /// same one: it counts an untracked scratch file as published, so a stray note beside the
+    /// solution reddens these fixtures on one machine while CI, which only ever has the
+    /// checkout, stays green. Generated files are left out — see
+    /// <see cref="GeneratedFileNames"/> — as are the private trees.
     /// </summary>
-    public static IReadOnlyList<string> EnumerateShippedFiles()
-    {
-        List<string> files = [];
-        Collect(Root, files);
-
-        return files;
-    }
+    public static IReadOnlyList<string> EnumerateShippedFiles() => LazyShippedFiles.Value;
 
     /// <summary>The repository-relative path, for readable assertion messages.</summary>
     public static string Describe(string absolutePath) =>
         Path.GetRelativePath(Root.FullName, absolutePath).Replace(Path.DirectorySeparatorChar, '/');
 
-    private static void Collect(DirectoryInfo directory, List<string> files)
+    private static List<string> ReadShippedFiles()
     {
-        foreach (FileInfo file in directory.EnumerateFiles())
-        {
-            if (IsShipped(file.Name))
-            {
-                files.Add(file.FullName);
-            }
-        }
+        List<string> files = [];
 
-        foreach (DirectoryInfo child in directory.EnumerateDirectories())
+        foreach (string relativePath in TrackedPaths())
         {
-            if (IsPruned(child))
+            if (IsPruned(relativePath) || !IsShipped(Path.GetFileName(relativePath)))
             {
                 continue;
             }
 
-            Collect(child, files);
+            string absolutePath = Path.Combine(Root.FullName, relativePath);
+
+            // The index can name a file the working tree does not currently hold — a
+            // conflicted merge, a sparse checkout. Every caller reads what it is handed.
+            if (File.Exists(absolutePath))
+            {
+                files.Add(absolutePath);
+            }
         }
+
+        return files;
     }
 
-    private static bool IsPruned(DirectoryInfo directory) =>
-        PrunedDirectoryNames.Contains(directory.Name, StringComparer.OrdinalIgnoreCase)
-        || PrunedRelativePaths.Contains(Describe(directory.FullName), StringComparer.OrdinalIgnoreCase);
+    /// <summary>
+    /// The paths git tracks, repository-relative and forward-slashed as git writes them.
+    /// Separated by NUL so that a name git would otherwise quote and escape arrives whole.
+    /// </summary>
+    private static string[] TrackedPaths()
+    {
+        ProcessStartInfo start = new("git")
+        {
+            WorkingDirectory = Root.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        start.ArgumentList.Add("ls-files");
+        start.ArgumentList.Add("-z");
+
+        using Process git = Process.Start(start)
+            ?? throw new InvalidOperationException(
+                "Could not start 'git'. What this repository publishes is what it tracks, so "
+                + "these fixtures have to run from a checkout with git available.");
+
+        // Drain before waiting: the listing is long enough to fill a pipe, and a process
+        // blocked on a pipe nobody is reading would hang rather than fail.
+        Task<string> listing = git.StandardOutput.ReadToEndAsync();
+        Task<string> failure = git.StandardError.ReadToEndAsync();
+        git.WaitForExit();
+
+        if (git.ExitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"'git ls-files' exited with {git.ExitCode} in '{Root.FullName}'. "
+                + failure.Result.Trim());
+        }
+
+        return listing.Result.Split('\0', StringSplitOptions.RemoveEmptyEntries);
+    }
+
+    private static bool IsPruned(string relativePath) =>
+        PrunedRelativePaths.Any(pruned =>
+            relativePath.StartsWith($"{pruned}/", StringComparison.OrdinalIgnoreCase))
+        || relativePath.Split('/')
+            .Any(segment => PrunedDirectoryNames.Contains(segment, StringComparer.OrdinalIgnoreCase));
 
     private static bool IsShipped(string fileName) =>
         !GeneratedFileNames.Contains(fileName, StringComparer.OrdinalIgnoreCase)

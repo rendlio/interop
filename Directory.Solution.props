@@ -1,0 +1,20 @@
+<Project>
+
+  <!-- Why this file exists: MSBuild reads Platform from the environment, and a solution build
+       then demands a solution configuration for whatever it found — "Release|x64" for a shell
+       that exported Platform=x64, which vcvarsall.bat does and some tooling inherits. This
+       solution declares only the default configurations, so restore, build, test, pack and
+       format all die with MSB4126 before a single project is loaded, on a machine where
+       nothing is wrong with the checkout.
+
+       An assignment here settles it, because an environment variable loses to a property set
+       in a file while a command-line -p: wins over both. So an ambient Platform no longer
+       decides how this solution builds, and an explicit -p:Platform=x64 still gets the honest
+       MSB4126 it deserves: this solution really does not declare that configuration.
+
+       Only solution builds import this file, so a project built directly is untouched. -->
+  <PropertyGroup>
+    <Platform>Any CPU</Platform>
+  </PropertyGroup>
+
+</Project>

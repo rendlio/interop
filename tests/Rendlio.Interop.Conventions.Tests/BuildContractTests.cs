@@ -12,6 +12,11 @@ namespace Rendlio.Interop.Conventions.Tests;
 /// written rather than defaulted. Turning one off is a change to what this repository
 /// promises, so it should show up as a failing test rather than as a quiet edit to a props
 /// file.
+///
+/// Everything here reads a setting. Whether a setting still produces the behaviour it was
+/// written for is a different question and cannot be answered by reading: that is what
+/// <see cref="PackagingContractTests"/> and <see cref="SolutionBuildTests"/> are for, and
+/// where the claims about an undocumented member and an inherited platform are actually run.
 /// </summary>
 public sealed partial class BuildContractTests
 {
@@ -25,10 +30,26 @@ public sealed partial class BuildContractTests
 
     private const string PackagingProps = "src/Directory.Build.props";
 
+    private const string SolutionProps = "Directory.Solution.props";
+
+    /// <summary>The only platform this solution declares, spelled the way a solution spells it.</summary>
+    private const string DefaultPlatform = "Any CPU";
+
+    /// <summary>How a workflow drops the audit exemption for the length of its own run.</summary>
+    private const string AuditPromotion = "-p:WarningsNotAsErrors=";
+
     private const string RepositoryHome = "https://github.com/rendlio/rendlio-interop";
 
     /// <summary>Shared tags; a project appends its upstream rather than replacing these.</summary>
     private const string SharedPackageTags = "rendlio;rendlio-sheets;spreadsheet;interop;adapter";
+
+    /// <summary>
+    /// What the NuGet audit reports against the advisory database. These four are the only
+    /// warnings this repository declines to fail on, and only because a job of their own asks
+    /// the question on a schedule instead. Sorted, because the assertion compares against a
+    /// sorted list rather than against the order somebody typed them in.
+    /// </summary>
+    private static readonly string[] AuditWarnings = ["NU1901", "NU1902", "NU1903", "NU1904"];
 
     /// <summary>
     /// What the SDK puts in the <c>description</c> field of a package that sets none. It packs
@@ -59,6 +80,41 @@ public sealed partial class BuildContractTests
     }
 
     [Fact]
+    public void A_solution_build_does_not_take_its_platform_from_the_environment()
+    {
+        // MSBuild reads Platform from the environment, and a solution build then demands a
+        // solution configuration for whatever it found there. Only the defaults are declared,
+        // so a shell that has run vcvarsall.bat stops restore, build, test, pack and format
+        // before a project is loaded. An assignment in a file settles it, because a file beats
+        // the environment and loses to a command-line -p: — which is the order this wants.
+        // What that assignment then does is run in SolutionBuildTests.
+        Assert.Equal(DefaultPlatform, Property(SolutionProps, "Platform"));
+    }
+
+    [Fact]
+    public void The_audit_is_the_only_warning_this_repository_declines_to_fail_on()
+    {
+        // Every other warning is an error because it would otherwise reappear in a consumer's
+        // build, where they cannot fix it. The audit is exempt for the opposite reason: it
+        // reports on a database that changes with nobody committing anything, so it would
+        // redden work that has nothing to do with it. That argument covers these four codes
+        // and no others, so anything else added here is a promise being weakened.
+        string exempted = Property("Directory.Build.props", "WarningsNotAsErrors") ?? string.Empty;
+
+        string[] listed =
+        [
+            .. exempted
+                .Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                // The property's own prior value, which the assignment appends to rather than
+                // replaces. It is a reference, not a code.
+                .Where(entry => !entry.StartsWith("$(", StringComparison.Ordinal))
+                .Order(StringComparer.Ordinal),
+        ];
+
+        Assert.Equal(AuditWarnings, listed);
+    }
+
+    [Fact]
     public void Nothing_packs_unless_it_opts_in()
     {
         // The default is off repository-wide and back on only under src/, so a project can
@@ -77,7 +133,9 @@ public sealed partial class BuildContractTests
     public void A_package_documents_its_public_members()
     {
         // With warnings as errors this is what turns an undocumented public member into a
-        // build failure, which is the promise the README's Contributing section makes.
+        // build failure, which is the promise the README's Contributing section makes. Half
+        // of that promise is this setting; that the two halves still add up to a failed build
+        // is run rather than read, in PackagingContractTests.
         Assert.Equal("true", Property(PackagingProps, "GenerateDocumentationFile"));
     }
 
@@ -278,6 +336,57 @@ public sealed partial class BuildContractTests
             + "one enters the build unreviewed.");
     }
 
+    [Fact]
+    public void The_exempted_audit_warnings_are_asked_about_by_a_job_of_their_own()
+    {
+        // The exemption above is only defensible while the question is still being asked. A
+        // workflow deleted, or rewritten by somebody who did not know what that flag was
+        // paying for, leaves the exemption behind as a hole nothing reports: the advisory
+        // database goes unread and no build says so.
+        (string Name, string Text)[] workflows = [.. Workflows()];
+
+        Assert.NotEmpty(workflows);
+
+        bool asked = workflows.Any(workflow =>
+            workflow.Text.Contains(AuditPromotion, StringComparison.Ordinal));
+
+        Assert.True(
+            asked,
+            $"No workflow runs with '{AuditPromotion}', so nothing promotes the audit warnings "
+            + "back to errors. Directory.Build.props exempts them from warnings-as-errors on "
+            + "the understanding that a job of their own asks the question instead; without "
+            + "that job the exemption is a warning nobody reads.");
+    }
+
+    [Fact]
+    public void No_workflow_cancels_an_in_progress_run_on_a_push()
+    {
+        (string Name, string Text)[] workflows = [.. Workflows()];
+
+        // Guards the assertion below. With no workflow triggered by a push there is nothing
+        // here to get wrong, and the rule would hold by describing nothing.
+        Assert.NotEmpty(workflows);
+        Assert.Contains(workflows, workflow => PushTriggerPattern().IsMatch(workflow.Text));
+
+        string[] cancelling =
+        [
+            .. workflows
+                .Where(workflow =>
+                    PushTriggerPattern().IsMatch(workflow.Text)
+                    && UnconditionalCancelPattern().IsMatch(workflow.Text))
+                .Select(workflow => workflow.Name),
+        ];
+
+        Assert.True(
+            cancelling.Length == 0,
+            $"These workflows cancel an in-progress run on a push: {string.Join(", ", cancelling)}. "
+            + "Merges land here by fast-forward and can arrive seconds apart, so the run being "
+            + "cancelled is the one recording the verdict for a commit that is already on the "
+            + "branch, and that commit ends up with no verdict at all. Make the cancellation "
+            + "conditional on the event being a pull request, where superseding a run is the "
+            + "point of it.");
+    }
+
     /// <summary>Every CI workflow, as a repository-relative path and its text.</summary>
     private static IEnumerable<(string Name, string Text)> Workflows() =>
         Directory
@@ -292,8 +401,25 @@ public sealed partial class BuildContractTests
             .Select(project => project.Attribute("Path")?.Value ?? string.Empty)
             .Where(path => path.Length > 0);
 
-    private static string? Property(string relativePath, string name) =>
-        Document(relativePath).Descendants(name).FirstOrDefault()?.Value.Trim();
+    /// <summary>
+    /// What a file sets a property to, and a failure if it sets it more than once. Reading
+    /// only the first occurrence is how a setting goes half-verified: a second assignment
+    /// further down is the one that would win, and a conditioned one means the value depends
+    /// on something this never looked at. Either way the answer here would stop describing
+    /// the build.
+    /// </summary>
+    private static string? Property(string relativePath, string name)
+    {
+        List<XElement> declarations = [.. Document(relativePath).Descendants(name)];
+
+        Assert.True(
+            declarations.Count <= 1,
+            $"{relativePath} sets <{name}> {declarations.Count} times, so what it evaluates to "
+            + "is decided by order or by a condition rather than by any one of them. Settle it "
+            + "in one place, or assert on this property somewhere that can tell them apart.");
+
+        return declarations.SingleOrDefault()?.Value.Trim();
+    }
 
     private static XDocument Document(string relativePath) =>
         XDocument.Parse(RepositoryLayout.ReadFile(relativePath));
@@ -305,4 +431,15 @@ public sealed partial class BuildContractTests
     /// </summary>
     [GeneratedRegex(@"dotnet\s+restore(?!\s+--locked-mode\b)")]
     private static partial Regex UnlockedRestorePattern();
+
+    /// <summary>
+    /// A workflow triggered by a push. Anchored to the indentation a trigger has, so that the
+    /// word occurring in a comment or a step name is not read as one.
+    /// </summary>
+    [GeneratedRegex(@"(?m)^\s{2}push:")]
+    private static partial Regex PushTriggerPattern();
+
+    /// <summary>Cancellation with nothing deciding when it applies.</summary>
+    [GeneratedRegex(@"cancel-in-progress:\s*true\b")]
+    private static partial Regex UnconditionalCancelPattern();
 }
