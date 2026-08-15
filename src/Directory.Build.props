@@ -16,10 +16,48 @@
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
   </PropertyGroup>
 
+  <PropertyGroup Label="Package page">
+    <!-- Why here: a package page is the first thing a consumer reads, and everything on it
+         that is the same for every adapter belongs in one place rather than being retyped
+         per project — or, as happens by default, left for the SDK to fill in. Description is
+         deliberately absent: it describes one package, so the target below refuses to pack
+         until the project supplies its own. -->
+    <PackageProjectUrl>https://github.com/rendlio/rendlio-interop</PackageProjectUrl>
+    <!-- A project adds its upstream to these rather than replacing them:
+         <PackageTags>$(PackageTags);some-upstream</PackageTags>. -->
+    <PackageTags>rendlio;rendlio-sheets;spreadsheet;interop;adapter</PackageTags>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+
   <PropertyGroup Label="Public API">
     <!-- Why: combined with TreatWarningsAsErrors this makes an undocumented public member a
          build error. IntelliSense is the only documentation a consumer of a package gets. -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
+
+  <ItemGroup Label="Package page">
+    <!-- The project's own README, not the repository's: a package page describes the one
+         package being installed, not the repository it came from. Pack fails when it is
+         missing, which is the point — no adapter ships without a page. -->
+    <None Include="$(MSBuildProjectDirectory)/README.md" Pack="true" PackagePath="/" />
+  </ItemGroup>
+
+  <Target Name="RendlioValidatePackageDescription" BeforeTargets="GenerateNuspec">
+    <!-- Why an error rather than a convention in the README: the SDK supplies a placeholder
+         description, so a package that sets none packs cleanly and the placeholder is what
+         appears on the public package page. There is no warning to promote and nothing else
+         in the build has anything to say about it, so this is the only place the omission
+         can be caught, and before the .nuspec is written is the moment to catch it.
+
+         Why PackageDescription and not Description: PackageDescription is what pack reads,
+         and the SDK defaults it from Description. So this covers both spellings — a project
+         that sets either one passes — whereas testing Description would reject a project
+         that legitimately set only PackageDescription. It is also where the placeholder
+         actually lands; unset, Description evaluates to empty rather than to the
+         placeholder. -->
+    <Error
+      Condition=" '$(PackageDescription)' == '' or '$(PackageDescription)' == 'Package Description' "
+      Text="$(MSBuildProjectName) packs without a description of its own, so its package page would read &quot;Package Description&quot;. Set &lt;Description&gt; in the project file to one or two sentences naming the upstream this adapter bridges." />
+  </Target>
 
 </Project>

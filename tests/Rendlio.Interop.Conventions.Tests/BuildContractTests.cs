@@ -8,9 +8,10 @@ namespace Rendlio.Interop.Conventions.Tests;
 /// Pins the build settings the README promises a consumer. Each one is a published claim —
 /// that warnings are errors, that a package can only ship from <c>src/</c>, that an
 /// undocumented public member fails the build, that an upstream is always the published
-/// package, that a range resolves to the graph its lock records. Turning one off is a change
-/// to what this repository promises, so it should show up as a failing test rather than as a
-/// quiet edit to a props file.
+/// package, that a range resolves to the graph its lock records, that a package page is
+/// written rather than defaulted. Turning one off is a change to what this repository
+/// promises, so it should show up as a failing test rather than as a quiet edit to a props
+/// file.
 /// </summary>
 public sealed partial class BuildContractTests
 {
@@ -21,6 +22,25 @@ public sealed partial class BuildContractTests
     private const string SolutionFileName = "Rendlio.Interop.slnx";
 
     private const string WorkflowDirectory = ".github/workflows";
+
+    private const string PackagingProps = "src/Directory.Build.props";
+
+    private const string RepositoryHome = "https://github.com/rendlio/rendlio-interop";
+
+    /// <summary>Shared tags; a project appends its upstream rather than replacing these.</summary>
+    private const string SharedPackageTags = "rendlio;rendlio-sheets;spreadsheet;interop;adapter";
+
+    /// <summary>
+    /// What the SDK puts in the <c>description</c> field of a package that sets none. It packs
+    /// without complaint, so this exact string is what a consumer would read on the page.
+    /// </summary>
+    private const string SdkPlaceholderDescription = "Package Description";
+
+    /// <summary>
+    /// The property pack actually reads for the <c>description</c> field. The SDK defaults it
+    /// from <c>Description</c>, so a guard on this one covers a project that set either.
+    /// </summary>
+    private const string DescriptionProperty = "$(PackageDescription)";
 
     [Theory]
     [InlineData("Nullable", "enable")]
@@ -51,14 +71,77 @@ public sealed partial class BuildContractTests
     {
         // With warnings as errors this is what turns an undocumented public member into a
         // build failure, which is the promise the README's Contributing section makes.
-        Assert.Equal("true", Property("src/Directory.Build.props", "GenerateDocumentationFile"));
+        Assert.Equal("true", Property(PackagingProps, "GenerateDocumentationFile"));
     }
 
     [Fact]
     public void Every_package_this_repository_produces_is_mit()
     {
         // Rule 1: funnel code is MIT. This property is what stamps that onto the .nupkg.
-        Assert.Equal("MIT", Property("src/Directory.Build.props", "PackageLicenseExpression"));
+        Assert.Equal("MIT", Property(PackagingProps, "PackageLicenseExpression"));
+    }
+
+    [Theory]
+    [InlineData("PackageProjectUrl", RepositoryHome)]
+    [InlineData("PackageTags", SharedPackageTags)]
+    public void The_part_of_a_package_page_that_is_the_same_everywhere_is_written_once(
+        string property, string expected)
+    {
+        // A package page is the first thing a consumer reads, and the SDK writes one for a
+        // package that says nothing. Whatever is identical across every adapter is set here
+        // so no adapter can ship a page by accident.
+        Assert.Equal(expected, Property(PackagingProps, property));
+    }
+
+    [Fact]
+    public void Every_package_ships_a_page_of_its_own()
+    {
+        // PackageReadmeFile only names the file; the item is what puts it in the package.
+        // Both point at the project's own README rather than this repository's, because a
+        // page describes the one package a consumer is installing. Pack fails when it is
+        // missing, which is the point.
+        Assert.Equal("README.md", Property(PackagingProps, "PackageReadmeFile"));
+
+        XElement packed = Document(PackagingProps)
+            .Descendants("None")
+            .SingleOrDefault(none =>
+                none.Attribute("Include")?.Value.EndsWith("README.md", StringComparison.Ordinal) == true)
+            ?? throw new InvalidOperationException(
+                $"{PackagingProps} names a package readme but no longer packs one.");
+
+        Assert.Equal("true", packed.Attribute("Pack")?.Value);
+        Assert.Contains(
+            "MSBuildProjectDirectory",
+            packed.Attribute("Include")?.Value ?? string.Empty,
+            StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void No_package_ships_without_a_description_of_its_own()
+    {
+        // Description names one package, so unlike the rest of the page it cannot be set
+        // centrally — and the SDK's default for it packs without complaint, which is how
+        // placeholder text reaches a public package page. This is the only place that
+        // omission can be caught, so it is caught as a failed pack.
+        XElement guard = Document(PackagingProps)
+            .Descendants("Target")
+            .Where(target => target.Attribute("BeforeTargets")?.Value == "GenerateNuspec")
+            .Elements("Error")
+            .SingleOrDefault()
+            ?? throw new InvalidOperationException(
+                $"{PackagingProps} no longer fails the pack of a package that sets no Description.");
+
+        string condition = guard.Attribute("Condition")?.Value ?? string.Empty;
+
+        // On the property pack reads, not on Description. The two are not interchangeable:
+        // the SDK defaults this one from Description, so guarding it accepts a project that
+        // set either spelling, while guarding Description would reject one that set only
+        // PackageDescription.
+        Assert.Contains(DescriptionProperty, condition, StringComparison.Ordinal);
+
+        // Checking only for an empty description would let the SDK's placeholder through,
+        // and the placeholder is the case that actually reaches a consumer.
+        Assert.Contains(SdkPlaceholderDescription, condition, StringComparison.Ordinal);
     }
 
     [Fact]
@@ -82,6 +165,28 @@ public sealed partial class BuildContractTests
         string[] configured = [.. sources.Elements("add").Select(add => add.Attribute("value")?.Value ?? string.Empty)];
 
         Assert.Equal([NuGetOrg], configured);
+    }
+
+    [Fact]
+    public void Nothing_but_the_configured_sources_decides_where_a_package_comes_from()
+    {
+        // Clearing packageSources is not the whole job: a package source mapping decides
+        // which of the configured sources serves which package, and one is inherited from
+        // whatever the machine happens to have. It cannot defeat rule 2 — a mapping only
+        // narrows sources that are already defined, so a hostile one fails a restore loudly
+        // rather than substituting an upstream quietly — but a mapping nobody here wrote is
+        // a restore that reproduces differently on a contributor's box, and that has already
+        // cost one false result.
+        XElement mapping = Document("NuGet.config").Root?.Element("packageSourceMapping")
+            ?? throw new InvalidOperationException(
+                "NuGet.config declares no <packageSourceMapping>, so it inherits the machine's.");
+
+        Assert.Equal("clear", mapping.Elements().First().Name.LocalName);
+
+        // Nothing after the clear on purpose: with no pattern declared, mapping is off and
+        // <packageSources> is the only answer. An entry here would be a second, quieter
+        // place to change where a package comes from.
+        Assert.Empty(mapping.Elements("packageSource"));
     }
 
     [Fact]

@@ -17,7 +17,7 @@ adapter landing here has to follow.
 
 | Path | Contents |
 | --- | --- |
-| `src/` | Adapter packages, one project per upstream library (`Rendlio.Interop.*`). |
+| `src/` | Adapter packages, one project per upstream library (`Rendlio.Interop.*`), each with the `README.md` that becomes its package page. |
 | `tests/` | Test projects. |
 | `tools/` | Tooling run from a checkout, never packed — see [Rendlio.Interop.Sweep](tools/Rendlio.Interop.Sweep/README.md). |
 | `Directory.Build.props` | Shared build settings: nullable enabled, warnings as errors. |
@@ -110,6 +110,13 @@ and committing the `packages.lock.json` files it rewrites alongside the range th
 - One adapter package per upstream library, with tests.
 - Public members carry XML documentation. `GenerateDocumentationFile` is on for everything
   under `src/` and warnings are errors, so an undocumented public member fails the build.
+- Every adapter writes its own package page: a `README.md` next to its project file, and a
+  `<Description>` of a sentence or two naming the upstream it bridges. The shared settings
+  under `src/` supply the rest of the page — licence, project URL, tags — and a project adds
+  its upstream to the shared tags rather than replacing them
+  (`<PackageTags>$(PackageTags);some-upstream</PackageTags>`). Pack fails if either the page
+  or the description is missing, because the SDK's stand-ins for them publish cleanly and
+  a consumer would read those instead.
 - Run `dotnet format --verify-no-changes` before opening a pull request.
 - Do not add a dependency to a packable project without saying why in the pull request — it
   becomes a transitive dependency for everyone who installs the package.
