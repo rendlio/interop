@@ -24,6 +24,7 @@ adapter landing here has to follow.
 | `NuGet.config` | Restore resolves from nuget.org only, so an upstream is always the published package. |
 | `.github/workflows/ci.yml` | Build and test on every push and pull request. |
 | `SUPPORT.md` | What is in scope here, how a bug is routed, and what a response looks like. |
+| `UPSTREAM-PATCHES.md` | How a bug in an upstream library becomes a pull request there, and what is never attached to one. |
 
 ## Building
 
@@ -67,7 +68,9 @@ it, patch it, or fork it.
   ClosedXML.Report are exactly that. Improvements go upstream as contributions.
 - **Never fork the living.** ClosedXML core and MiniExcel are actively maintained, and
   MiniExcel is a .NET Foundation project. A bug found through an adapter is reported
-  upstream and, where we can, fixed there — not routed around in a private copy.
+  upstream and, where we can, fixed there — not routed around in a private copy. The
+  [upstream patches policy](UPSTREAM-PATCHES.md) says how that fix is sent, and why the fork
+  it is sent from is not the kind this rule forbids.
 
 ### 3. Version pinning
 
@@ -93,6 +96,10 @@ moves afterwards. Narrowing a range needs no run and can happen at any time.
 Before opening an issue or a pull request, read the [support and triage policy](SUPPORT.md).
 It says what is in scope, how an upstream bug is told apart from an adapter bug, and what
 you can expect afterwards.
+
+Once a bug has been told apart and it turns out to be upstream, the [upstream patches
+policy](UPSTREAM-PATCHES.md) takes over: which of those bugs we fix ourselves, how the pull
+request is sent, and the rule that nothing — no request, no cash — is ever attached to it.
 
 ## Licence
 
