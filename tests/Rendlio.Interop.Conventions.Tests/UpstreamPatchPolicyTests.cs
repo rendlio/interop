@@ -1,4 +1,3 @@
-using System.Text.RegularExpressions;
 using Xunit;
 
 namespace Rendlio.Interop.Conventions.Tests;
@@ -12,7 +11,7 @@ namespace Rendlio.Interop.Conventions.Tests;
 /// rewritten freely, but it must not quietly stop saying which bugs qualify, how a patch is
 /// sent, what a contribution fork may never become, or that nothing is ever attached.
 /// </summary>
-public sealed partial class UpstreamPatchPolicyTests
+public sealed class UpstreamPatchPolicyTests
 {
     private const string Policy = "UPSTREAM-PATCHES.md";
 
@@ -31,8 +30,9 @@ public sealed partial class UpstreamPatchPolicyTests
     [Fact]
     public void The_readme_points_a_contributor_at_the_policy()
     {
-        // A policy nobody is sent to is a policy nobody reads. This is also the only thing
-        // holding the relative link, which would otherwise rot without a sound.
+        // A policy nobody is sent to is a policy nobody reads. Presence is the claim here:
+        // that the README still sends a contributor this way at all. Whether the link
+        // resolves is asked of every shipped page in ShippedLinkTests.
         Assert.Contains($"({Policy})", RepositoryLayout.ReadFile("README.md"), StringComparison.Ordinal);
     }
 
@@ -58,37 +58,13 @@ public sealed partial class UpstreamPatchPolicyTests
     }
 
     [Fact]
-    public void Every_link_the_policy_publishes_still_resolves()
-    {
-        // The page argues by pointing: the triage policy for where the boundary is drawn,
-        // the fork rules for why a contribution fork is not the fork rule 2 forbids. A
-        // reader who follows a dead link gets the assertion without the authority, and a
-        // renamed heading breaks it silently.
-        foreach ((string target, string anchor) in LinksFrom(Policy))
-        {
-            Assert.True(
-                File.Exists(Path.Combine(RepositoryLayout.Root.FullName, target)),
-                $"The policy links to '{target}', which does not exist.");
-
-            if (anchor.Length == 0)
-            {
-                continue;
-            }
-
-            Assert.True(
-                HeadingAnchors(target).Contains(anchor, StringComparer.Ordinal),
-                $"The policy links to '{target}#{anchor}', but that page has no such heading.");
-        }
-    }
-
-    [Fact]
     public void The_policy_qualifies_a_bug_by_what_our_own_work_touches()
     {
         // The boundary is the whole reason the program is affordable. Both halves have to
         // survive — a defect the pipeline catches, and one that forces a workaround — and so
         // does the limit, because a policy that quietly widened into an open offer of free
         // labour would be a promise nobody here could keep.
-        string prose = Prose(Policy);
+        string prose = MarkdownPage.Prose(Policy);
 
         Assert.Contains("fidelity QA pipeline catches it", prose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("forces a workaround", prose, StringComparison.OrdinalIgnoreCase);
@@ -100,7 +76,7 @@ public sealed partial class UpstreamPatchPolicyTests
     {
         // A patch in our house style costs a maintainer time before it saves them any, so
         // the etiquette is theirs, not a compromise between theirs and ours.
-        string prose = Prose(Policy);
+        string prose = MarkdownPage.Prose(Policy);
 
         Assert.Contains("contribution guide is followed as written", prose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("an issue first where the project asks for one", prose, StringComparison.OrdinalIgnoreCase);
@@ -115,7 +91,7 @@ public sealed partial class UpstreamPatchPolicyTests
         // to survive: it is cheap, it works briefly, and being caught at it discredits every
         // honest patch sent before and after. Both halves are pinned — turning up under our
         // own name, and never arriving twice.
-        string prose = Prose(Policy);
+        string prose = MarkdownPage.Prose(Policy);
 
         Assert.Contains("from an account that is visibly ours", prose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("No unattributed accounts", prose, StringComparison.OrdinalIgnoreCase);
@@ -131,7 +107,7 @@ public sealed partial class UpstreamPatchPolicyTests
         // Much of what we write starts as AI-authored code, and a maintainer inheriting it
         // inherits whatever provenance came with it. A reviewer whose name is on the commit
         // is what turns "we think this is fine" into someone actually answerable for it.
-        string prose = Prose(Policy);
+        string prose = MarkdownPage.Prose(Policy);
 
         Assert.Contains("A person reviews AI-authored code before it is sent", prose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("none of it reaches an upstream tracker unread", prose, StringComparison.OrdinalIgnoreCase);
@@ -145,7 +121,7 @@ public sealed partial class UpstreamPatchPolicyTests
         // A maintainer's review time is the scarce resource being spent. One fix per pull
         // request with a reproduction is the shape that costs the least of it; a patch
         // carrying a drive-by refactor costs far more than the fix was worth.
-        string prose = Prose(Policy);
+        string prose = MarkdownPage.Prose(Policy);
 
         Assert.Contains("One pull request per fix", prose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("a small file that reproduces it", prose, StringComparison.OrdinalIgnoreCase);
@@ -158,7 +134,7 @@ public sealed partial class UpstreamPatchPolicyTests
         // The load-bearing sentence of the whole page. A patch that carries a request stops
         // being a contribution and becomes a trade, and a maintainer who senses the trade is
         // right to discount everything around it — including the fix.
-        string prose = Prose(Policy);
+        string prose = MarkdownPage.Prose(Policy);
 
         Assert.Contains("A patch never carries a request with it", prose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("never a hint that one would be welcome", prose, StringComparison.OrdinalIgnoreCase);
@@ -170,7 +146,7 @@ public sealed partial class UpstreamPatchPolicyTests
         // Stated absolutely on purpose. A rule with an exception in it is the exception, and
         // the moment a maintainer could reasonably wonder whether a decision of theirs was
         // bought, the goodwill this program exists to earn is already spent.
-        string prose = Prose(Policy);
+        string prose = MarkdownPage.Prose(Policy);
 
         Assert.Contains("This program pays no cash sponsorships", prose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("not as a condition of anything", prose, StringComparison.OrdinalIgnoreCase);
@@ -194,7 +170,7 @@ public sealed partial class UpstreamPatchPolicyTests
     [InlineData("Allow edits by maintainers is ticked on every pull request")]
     public void The_policy_fixes_the_mechanics_that_keep_a_contribution_fork_harmless(string mechanic)
     {
-        Assert.Contains(mechanic, Prose(Policy), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(mechanic, MarkdownPage.Prose(Policy), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -203,7 +179,7 @@ public sealed partial class UpstreamPatchPolicyTests
         // The one place the program could turn into pressure without anyone deciding to.
         // The third clause matters most: a declined patch reappearing as a patched copy
         // inside an adapter would be rule 2 broken by a route that never argued with it.
-        string section = Section("When a patch is declined");
+        string section = MarkdownPage.Section(Policy, "When a patch is declined");
 
         Assert.Contains("The fix is not resubmitted", section, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("the maintainer is not pursued", section, StringComparison.OrdinalIgnoreCase);
@@ -220,7 +196,7 @@ public sealed partial class UpstreamPatchPolicyTests
         // tracker, where a correction is not ours to make. An association in formation is
         // not an association yet, and saying otherwise on a public thread would be a
         // misstatement with our name on it.
-        string prose = Prose(Policy);
+        string prose = MarkdownPage.Prose(Policy);
 
         Assert.Contains("Swiss association in formation", prose, StringComparison.Ordinal);
         Assert.Contains("profits are pledged to charities", prose, StringComparison.OrdinalIgnoreCase);
@@ -235,82 +211,15 @@ public sealed partial class UpstreamPatchPolicyTests
         //
         // The matching half of the rule — that the inaccurate term never appears — moved to
         // PublicSurfaceRulesTests. The search that stood here was not weak at what it did:
-        // Prose() normalises through Comparable(), so a line wrap and an emphasis marker both
-        // collapsed away and the phrase was caught through either. It was blind to the
-        // hyphenated spelling, which Comparable() leaves alone, and it only ever reached this
-        // one page. The rule that replaced it catches the hyphen and holds every page the
-        // repository publishes.
+        // MarkdownPage.Prose() collapses a line wrap and drops an emphasis marker, so the
+        // phrase was caught through either. It was blind to the hyphenated spelling, which
+        // that normalisation leaves alone, and it only ever reached this one page. The rule
+        // that replaced it catches the hyphen and holds every page the repository
+        // publishes.
         //
         // Neither spelling is written out above, and cannot be. This file is shipped and is
         // not one of the two sources that rule exempts, so quoting the phrase in order to
         // discuss it is itself enough to redden it — as the first draft of this comment did.
-        Assert.Contains("source-available", Prose(Policy), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("source-available", MarkdownPage.Prose(Policy), StringComparison.OrdinalIgnoreCase);
     }
-
-    /// <summary>The named section, up to the next heading, as comparable prose.</summary>
-    private static string Section(string heading)
-    {
-        string text = Normalise(RepositoryLayout.ReadFile(Policy));
-        string marker = $"## {heading}";
-        int start = text.IndexOf(marker, StringComparison.Ordinal);
-
-        Assert.True(start >= 0, $"The policy has no '{marker}' section.");
-
-        int next = text.IndexOf("\n## ", start + marker.Length, StringComparison.Ordinal);
-
-        return Comparable(next < 0 ? text[start..] : text[start..next]);
-    }
-
-    /// <summary>The whole page as comparable prose.</summary>
-    private static string Prose(string relativePath) =>
-        Comparable(Normalise(RepositoryLayout.ReadFile(relativePath)));
-
-    /// <summary>
-    /// Reduces a page to what it says. Emphasis and code markers are dropped and whitespace
-    /// runs collapse to a single space, so a pinned phrase survives a re-wrap or a word
-    /// being set in bold. The promises are pinned; the typesetting is not.
-    /// </summary>
-    private static string Comparable(string text) =>
-        WhitespaceRunPattern().Replace(MarkupPattern().Replace(text, string.Empty), " ").Trim();
-
-    /// <summary>Line endings, so a checkout that converted them still finds the headings.</summary>
-    private static string Normalise(string text) =>
-        text.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-    /// <summary>The relative links a page publishes, split into target file and anchor.</summary>
-    private static IEnumerable<(string Target, string Anchor)> LinksFrom(string relativePath)
-    {
-        foreach (Match link in RelativeLinkPattern().Matches(RepositoryLayout.ReadFile(relativePath)))
-        {
-            yield return (link.Groups["target"].Value, link.Groups["anchor"].Value);
-        }
-    }
-
-    /// <summary>
-    /// The anchors a Markdown page offers, derived from its headings the way GitHub derives
-    /// them: lowercased, punctuation dropped, spaces hyphenated.
-    /// </summary>
-    private static List<string> HeadingAnchors(string relativePath) =>
-        Normalise(RepositoryLayout.ReadFile(relativePath))
-            .Split('\n')
-            .Where(line => line.StartsWith('#'))
-            .Select(line => line.TrimStart('#').Trim())
-            .Select(heading => AnchorNoisePattern().Replace(heading.ToLowerInvariant(), string.Empty))
-            .Select(heading => heading.Replace(' ', '-'))
-            .ToList();
-
-    /// <summary>Markdown emphasis and inline-code markers, which carry no promise.</summary>
-    [GeneratedRegex(@"[*`]")]
-    private static partial Regex MarkupPattern();
-
-    [GeneratedRegex(@"\s+")]
-    private static partial Regex WhitespaceRunPattern();
-
-    /// <summary>An inline link to another page in this repository, with an optional anchor.</summary>
-    [GeneratedRegex(@"\]\((?<target>[A-Za-z0-9._/-]+\.md)(?:#(?<anchor>[^)]+))?\)")]
-    private static partial Regex RelativeLinkPattern();
-
-    /// <summary>Everything GitHub drops from a heading when it builds the anchor.</summary>
-    [GeneratedRegex(@"[^a-z0-9 -]")]
-    private static partial Regex AnchorNoisePattern();
 }

@@ -30,8 +30,9 @@ public sealed partial class SupportPolicyTests
     [Fact]
     public void The_readme_points_a_contributor_at_the_policy()
     {
-        // A policy nobody is sent to is a policy nobody reads. This is also the only thing
-        // holding the relative link, which would otherwise rot without a sound.
+        // A policy nobody is sent to is a policy nobody reads. Presence is the claim here:
+        // that the README still sends a contributor this way at all. Whether the link
+        // resolves is asked of every shipped page in ShippedLinkTests.
         Assert.Contains($"({Policy})", RepositoryLayout.ReadFile("README.md"), StringComparison.Ordinal);
     }
 
@@ -41,7 +42,7 @@ public sealed partial class SupportPolicyTests
         // A target that could not be held through a quiet month would be decoration, and
         // decoration is worse than saying nothing because it gets believed. Both halves
         // matter: saying so plainly, and never acquiring the vocabulary that walks it back.
-        string prose = Prose(Policy);
+        string prose = MarkdownPage.Prose(Policy);
 
         Assert.Contains("no response-time target", prose, StringComparison.OrdinalIgnoreCase);
 
@@ -58,7 +59,7 @@ public sealed partial class SupportPolicyTests
     {
         // These packages exist to carry documents into the rendering engine. Leaving that
         // unsaid makes every decline look arbitrary.
-        Assert.Contains("the engine's needs govern", Prose(Policy), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("the engine's needs govern", MarkdownPage.Prose(Policy), StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -67,7 +68,7 @@ public sealed partial class SupportPolicyTests
         // Rule 2. An adapter is glue over an unmodified package, so a defect on the far side
         // of the glue is repaired there. A triage policy that allowed a private patch
         // instead would be a licence to fork, arrived at sideways.
-        string prose = Prose(Policy);
+        string prose = MarkdownPage.Prose(Policy);
 
         Assert.Contains("reported upstream", prose, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("not worked around in a private copy", prose, StringComparison.OrdinalIgnoreCase);
@@ -78,7 +79,7 @@ public sealed partial class SupportPolicyTests
     {
         // The routing table describes how the work is divided; it is not a quiz to pass
         // before filing. Without the catch-all, someone who cannot tell files nothing.
-        Assert.Contains("If you cannot tell them apart", Prose(Policy), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("If you cannot tell them apart", MarkdownPage.Prose(Policy), StringComparison.OrdinalIgnoreCase);
     }
 
     [Theory]
@@ -89,7 +90,7 @@ public sealed partial class SupportPolicyTests
         // Four answers are needed rather than two: what is accepted and what is declined,
         // for an issue and for a pull request. A page that scopes only issues leaves a
         // contributor to discover the pull-request half after writing one.
-        string section = Section(heading);
+        string section = MarkdownPage.Section(Policy, heading);
 
         Assert.Contains("Issues", section, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Pull requests", section, StringComparison.OrdinalIgnoreCase);
@@ -103,40 +104,11 @@ public sealed partial class SupportPolicyTests
         // realistic outcome is the public disclosure the section exists to prevent. Two
         // things keep it open: the ban reaches only an issue that describes the problem, and
         // the fallback needs nothing switched on. A rewrite has to keep both.
-        string section = Section("Security");
+        string section = MarkdownPage.Section(Policy, "Security");
 
         Assert.Contains("do not open a public one describing it", section, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("no detail, no reproduction, no file", section, StringComparison.OrdinalIgnoreCase);
     }
-
-    /// <summary>The named section, up to the next heading, with its whitespace collapsed.</summary>
-    private static string Section(string heading)
-    {
-        string text = Normalise(RepositoryLayout.ReadFile(Policy));
-        string marker = $"## {heading}";
-        int start = text.IndexOf(marker, StringComparison.Ordinal);
-
-        Assert.True(start >= 0, $"The policy has no '{marker}' section.");
-
-        int next = text.IndexOf("\n## ", start + marker.Length, StringComparison.Ordinal);
-
-        return Collapse(next < 0 ? text[start..] : text[start..next]);
-    }
-
-    /// <summary>
-    /// The whole page with its whitespace collapsed. The prose wraps at about ninety-five
-    /// columns, so a pinned phrase can straddle a line break; collapsing means a re-wrap is
-    /// not a failure. The wording is pinned, the typesetting is not.
-    /// </summary>
-    private static string Prose(string relativePath) =>
-        Collapse(Normalise(RepositoryLayout.ReadFile(relativePath)));
-
-    /// <summary>Line endings, so a checkout that converted them still finds the headings.</summary>
-    private static string Normalise(string text) =>
-        text.Replace("\r\n", "\n", StringComparison.Ordinal);
-
-    private static string Collapse(string text) =>
-        WhitespaceRunPattern().Replace(text, " ").Trim();
 
     /// <summary>
     /// The vocabulary a response-time promise is written in. "Business days" has no other
@@ -146,7 +118,4 @@ public sealed partial class SupportPolicyTests
         @"\b(business|working)\s+(day|hour)s?\b|\bwithin\s+\d+\s+(hour|day|week|month)s?\b",
         RegexOptions.IgnoreCase)]
     private static partial Regex ServiceLevelPattern();
-
-    [GeneratedRegex(@"\s+")]
-    private static partial Regex WhitespaceRunPattern();
 }
