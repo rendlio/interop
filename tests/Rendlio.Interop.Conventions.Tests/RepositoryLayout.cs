@@ -26,10 +26,17 @@ internal static class RepositoryLayout
     /// <summary>Repository-relative directories that are private rather than published.</summary>
     private static readonly string[] PrunedRelativePaths = ["docs/internal"];
 
+    /// <summary>
+    /// <c>.txt</c> is here for the two <c>PublicAPI</c> files each package keeps beside its
+    /// project. They are a written-down copy of the public surface, which makes them the one
+    /// document in the tree guaranteed to name every public type by its full name — including
+    /// one belonging to a package nobody has announced. The rest of the list is source and
+    /// configuration.
+    /// </summary>
     private static readonly string[] ShippedExtensions =
     [
         ".md", ".cs", ".csproj", ".props", ".targets", ".config", ".json",
-        ".yml", ".yaml", ".slnx",
+        ".yml", ".yaml", ".slnx", ".txt",
     ];
 
     /// <summary>Shipped files whose whole name is the extension, plus the licence.</summary>

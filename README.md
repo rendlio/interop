@@ -17,7 +17,7 @@ adapter landing here has to follow.
 
 | Path | Contents |
 | --- | --- |
-| `src/` | Adapter packages, one project per upstream library (`Rendlio.Interop.*`), each with the `README.md` that becomes its package page. |
+| `src/` | Adapter packages, one project per upstream library (`Rendlio.Interop.*`), each with the `README.md` that becomes its package page and the two `PublicAPI` files that record its public surface. |
 | `tests/` | Test projects. |
 | `tools/` | Tooling run from a checkout, never packed — see [Rendlio.Interop.Sweep](tools/Rendlio.Interop.Sweep/README.md). |
 | `Directory.Build.props` | Shared build settings: nullable enabled, warnings as errors. |
@@ -119,6 +119,13 @@ and committing the `packages.lock.json` files it rewrites alongside the range th
 - One adapter package per upstream library, with tests.
 - Public members carry XML documentation. `GenerateDocumentationFile` is on for everything
   under `src/` and warnings are errors, so an undocumented public member fails the build.
+- The public surface is written down, not just reviewed. Each project keeps
+  `PublicAPI.Shipped.txt` and `PublicAPI.Unshipped.txt` beside its project file, both starting
+  with `#nullable enable` so the record carries nullability, and a public member neither file
+  lists fails the build. A new member goes into `PublicAPI.Unshipped.txt` in the change that
+  introduces it and moves to `PublicAPI.Shipped.txt` when the version carrying it is published.
+  A member is permanent from that version onward, which is why adding one is a line in a
+  reviewed file rather than the absence of one.
 - Every adapter writes its own package page: a `README.md` next to its project file, and a
   `<Description>` of a sentence or two naming the upstream it bridges. The shared settings
   under `src/` supply the rest of the page — licence, project URL, tags — and a project adds

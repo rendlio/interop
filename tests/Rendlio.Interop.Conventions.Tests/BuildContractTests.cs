@@ -70,6 +70,12 @@ public sealed partial class BuildContractTests
     /// </summary>
     private const string PackableProperty = "$(IsPackable)";
 
+    /// <summary>
+    /// The analyzer that reads a project's two <c>PublicAPI</c> files and fails the build over
+    /// a public member neither of them records.
+    /// </summary>
+    private const string SurfaceAnalyzer = "Microsoft.CodeAnalysis.PublicApiAnalyzers";
+
     [Theory]
     [InlineData("Nullable", "enable")]
     [InlineData("TreatWarningsAsErrors", "true")]
@@ -137,6 +143,45 @@ public sealed partial class BuildContractTests
         // of that promise is this setting; that the two halves still add up to a failed build
         // is run rather than read, in PackagingContractTests.
         Assert.Equal("true", Property(PackagingProps, "GenerateDocumentationFile"));
+    }
+
+    [Fact]
+    public void A_package_records_its_public_surface_in_a_file_the_build_reads()
+    {
+        // The other half of what src/ promises about a public member. Documentation makes the
+        // member explicable; this makes it deliberate. A member is permanent from the version
+        // that first carried it, and the only moment it can still be taken back is before
+        // that version exists — so the surface is kept in PublicAPI.Shipped.txt and
+        // PublicAPI.Unshipped.txt beside the project, and a member neither file records fails
+        // the build. What the analyzer does with those files is run in PackagingContractTests;
+        // this pins that it is still referenced, which is the part a props file can answer.
+        List<XElement> referenced =
+        [
+            .. Document(PackagingProps)
+                .Descendants("PackageReference")
+                .Where(reference => reference.Attribute("Include")?.Value == SurfaceAnalyzer),
+        ];
+
+        Assert.True(
+            referenced.Count == 1,
+            $"{PackagingProps} should reference {SurfaceAnalyzer} exactly once, but references "
+            + $"it {referenced.Count} times.");
+
+        // The attribute that keeps it a build-time tool rather than something every consumer
+        // installs alongside an adapter. Losing it would satisfy every other assertion here.
+        Assert.Equal("all", referenced[0].Attribute("PrivateAssets")?.Value);
+
+        // No version on the reference itself: versions are managed centrally, and one written
+        // here would be an error under that rather than an override of it.
+        Assert.Null(referenced[0].Attribute("Version"));
+
+        // Said rather than left to restore. src/ holds no project yet, so nothing in this
+        // repository's own build resolves this reference, and the central version could go
+        // missing without any of it turning red.
+        Assert.Contains(
+            Document("Directory.Packages.props").Descendants("PackageVersion"),
+            declared => declared.Attribute("Include")?.Value == SurfaceAnalyzer
+                && declared.Attribute("Version")?.Value.Length > 0);
     }
 
     [Fact]

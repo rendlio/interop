@@ -19,15 +19,15 @@ namespace Rendlio.Interop.Conventions.Tests;
 /// <c>src/</c>, for two reasons. The fixtures that scan what this repository publishes walk the
 /// tree while these tests run, so a project materialising under <c>src/</c> mid-run would be a
 /// race rather than a test. And a package that exists only to be packed does not belong in the
-/// tree a contributor reads. It imports the same props by absolute path, which is what position
-/// under <c>src/</c> would otherwise have given it, and it references no package, so pack needs
-/// no network.
+/// tree a contributor reads. It imports the same props by absolute path, and is pointed at the
+/// same central versions and the same package sources — which between them are what position under
+/// <c>src/</c> would otherwise have given it.
 ///
-/// Every case here starts a build, which is why this fixture is measured in seconds while the
-/// rest of the suite finishes in milliseconds. That is the price of the question: neither a
-/// placeholder on a public package page nor a public member a consumer's IntelliSense has nothing
-/// to say about can be taken back by editing it later, because the version that carried it stays
-/// published.
+/// Every case here starts a restore and a build, which is why this fixture is measured in tens of
+/// seconds while the rest of the suite finishes in milliseconds. That is the price of the
+/// question: a placeholder on a public package page, a public member a consumer's IntelliSense has
+/// nothing to say about, a public member nobody wrote down — none of them can be taken back by
+/// editing it later, because the version that carried it stays published.
 ///
 /// The warning policy is run here for the same reason. Warnings are errors, with the four audit
 /// codes exempted, and that exemption is only defensible because a workflow drops it again with a
@@ -36,6 +36,14 @@ namespace Rendlio.Interop.Conventions.Tests;
 /// and the whole arrangement rests on it, so it is run rather than assumed — with <c>CS1591</c>
 /// standing in for an advisory code, which cannot be raised without a vulnerable package and a
 /// network to learn about it from.
+///
+/// So is the public-surface gate, and it is the strongest case in the fixture for running rather
+/// than reading. Everything it does is decided inside an analyzer package: whether a project with
+/// neither baseline file is treated as one that has not opted in and left alone, whether a project
+/// given one file of the two is told so, whether the reference stays out of the dependency list a
+/// consumer installs. None of that can be read off <c>src/Directory.Build.props</c>, all of it can
+/// change with the version pinned in <c>Directory.Packages.props</c>, and the failure mode of the
+/// first — a gate that silently passes — is one nothing else in this repository would report.
 /// </summary>
 public sealed class PackagingContractTests
 {
@@ -76,6 +84,28 @@ public sealed class PackagingContractTests
         + "    /// <summary>How many rows the bridged sheet has.</summary>\n"
         + "    public static int Rows => 0;\n"
         + "}\n";
+
+    /// <summary>The analyzer that reads the two baseline files, by the id a .nuspec would use.</summary>
+    private const string SurfaceAnalyzer = "Microsoft.CodeAnalysis.PublicApiAnalyzers";
+
+    /// <summary>
+    /// A declared surface with nothing in it. The header is not decoration: without it the
+    /// recorded surface carries no nullability, and a reference-typed member is rejected for
+    /// that alone. What a project looks like once it has opted in and before it is public.
+    /// </summary>
+    private const string NothingDeclared = "#nullable enable\n";
+
+    /// <summary>
+    /// The surface of the two types above, as the analyzer spells it. Both declare the same
+    /// members — they differ only in comments — so one declaration covers both. The implicit
+    /// constructor is a line of its own, which is the sort of member the file exists to make
+    /// visible: nobody writes it, everybody ships it.
+    /// </summary>
+    private const string BridgeDeclared =
+        "#nullable enable\n"
+        + "Probe.Bridge\n"
+        + "Probe.Bridge.Bridge() -> void\n"
+        + "static Probe.Bridge.Rows.get -> int\n";
 
     [Fact]
     public void A_package_that_supplies_no_description_does_not_pack()
@@ -140,16 +170,7 @@ public sealed class PackagingContractTests
 
         string package = Assert.Single(probe.ProducedPackages());
         using ZipArchive archive = ZipFile.OpenRead(package);
-
-        // Read the shipped artifact rather than the intermediate .nuspec beside it: what a
-        // consumer installs is the only copy of this that matters.
-        ZipArchiveEntry manifest = Assert.Single(
-            archive.Entries,
-            entry => entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal));
-
-        using Stream content = manifest.Open();
-        XElement metadata = XDocument.Load(content).Root?.Elements().First()
-            ?? throw new InvalidOperationException("The packed .nuspec has no <metadata>.");
+        XElement metadata = Manifest(archive);
 
         Assert.Equal(RealDescription, Field(metadata, "description"));
         Assert.NotEqual(SdkPlaceholder, Field(metadata, "description"));
@@ -174,7 +195,14 @@ public sealed class PackagingContractTests
         // produces the warning, warnings-as-errors repository-wide turns it into a failure.
         // Either one on its own is silent, and reading the props can only show that both are
         // written down — not that they still add up.
-        using Probe probe = new(description: RealDescription, source: UndocumentedPublicType);
+        //
+        // The surface is declared so that the only thing wrong with this project is the missing
+        // comments. Left undeclared it would fail for two reasons at once, and the assertion
+        // below would no longer be able to tell which.
+        using Probe probe = new(
+            description: RealDescription,
+            source: UndocumentedPublicType,
+            declaredApi: BridgeDeclared);
 
         PackResult result = probe.Build();
 
@@ -192,7 +220,10 @@ public sealed class PackagingContractTests
         // Guards the test above, which a probe that could not build anything at all would
         // satisfy while proving nothing. The only difference between the two projects is the
         // comments, so this is what makes the other one a statement about documentation.
-        using Probe probe = new(description: RealDescription, source: DocumentedPublicType);
+        using Probe probe = new(
+            description: RealDescription,
+            source: DocumentedPublicType,
+            declaredApi: BridgeDeclared);
 
         PackResult result = probe.Build();
 
@@ -209,7 +240,8 @@ public sealed class PackagingContractTests
         using Probe probe = new(
             description: RealDescription,
             source: UndocumentedPublicType,
-            exemptWarning: ExemptibleWarning);
+            exemptWarning: ExemptibleWarning,
+            declaredApi: BridgeDeclared);
 
         PackResult result = probe.Build();
 
@@ -233,7 +265,8 @@ public sealed class PackagingContractTests
         using Probe probe = new(
             description: RealDescription,
             source: UndocumentedPublicType,
-            exemptWarning: ExemptibleWarning);
+            exemptWarning: ExemptibleWarning,
+            declaredApi: BridgeDeclared);
 
         PackResult result = probe.Build(DropExemption);
 
@@ -242,6 +275,140 @@ public sealed class PackagingContractTests
         // As an error specifically. The warning is still reported either way, so matching the
         // bare code would pass against the exempted build this is meant to differ from.
         Assert.Contains($"error {ExemptibleWarning}", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_public_member_the_declared_surface_does_not_record_does_not_build()
+    {
+        // The claim the whole arrangement rests on, and the one a reviewer cannot be asked to
+        // make: this member is public, it is documented, it compiles, and the only thing wrong
+        // with it is that nobody wrote it down. Published once, it is permanent — so the build
+        // is the last place it can still be stopped.
+        using Probe probe = new(
+            description: RealDescription,
+            source: DocumentedPublicType,
+            declaredApi: NothingDeclared);
+
+        PackResult result = probe.Build();
+
+        Assert.False(result.Succeeded, $"Build should have failed but succeeded:\n{result.Output}");
+
+        // By number, not by any failure at all: a project that could not restore also fails a
+        // build while saying nothing whatever about a public surface.
+        Assert.Contains("RS0016", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_public_member_the_declared_surface_records_builds()
+    {
+        // Guards the three tests around it, which a probe that could not build anything at all
+        // would satisfy while proving nothing. The only difference from the one above is the
+        // three lines in PublicAPI.Unshipped.txt, which is what makes the others statements
+        // about those lines rather than about the probe.
+        using Probe probe = new(
+            description: RealDescription,
+            source: DocumentedPublicType,
+            declaredApi: BridgeDeclared);
+
+        PackResult result = probe.Build();
+
+        Assert.True(result.Succeeded, $"Build should have succeeded:\n{result.Output}");
+    }
+
+    [Fact]
+    public void A_package_that_declares_no_surface_at_all_does_not_build()
+    {
+        // The case that decides whether any of this is worth having, and the one that cannot be
+        // read off a props file. An analyzer of this kind could reasonably treat a project with
+        // neither file as one that has not opted in, and say nothing — which is exactly how the
+        // first adapter would ship an unpinned surface while every setting under src/ looked
+        // correct and every other test here passed. It does not: with nothing recorded, nothing
+        // is declared, and every public member is one the declared surface does not have.
+        using Probe probe = new(description: RealDescription, source: DocumentedPublicType);
+
+        PackResult result = probe.Build();
+
+        Assert.False(result.Succeeded, $"Build should have failed but succeeded:\n{result.Output}");
+        Assert.Contains("RS0016", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void A_surface_declared_in_only_one_of_its_two_files_does_not_build()
+    {
+        // Between "both files" and "neither" is a state where the analyzer has been handed half
+        // of what it reads, and it is the state a project drifts into rather than one anybody
+        // chooses: a file deleted with the code it recorded, a project copied without both
+        // halves. It has to fail, because it is the one shape whose diff looks fine — the
+        // reference is there, a baseline is there, and nothing in the props file has moved.
+        using Probe probe = new(
+            description: RealDescription,
+            source: DocumentedPublicType,
+            declaredApi: BridgeDeclared,
+            withShippedApi: false);
+
+        PackResult result = probe.Build();
+
+        Assert.False(result.Succeeded, $"Build should have failed but succeeded:\n{result.Output}");
+
+        // The missing-file diagnostic specifically. Matching any failure would also pass on the
+        // reading that half a baseline leaves every member undeclared, which is a different
+        // claim about a different code.
+        Assert.Contains("RS0048", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void The_analyzer_that_pins_the_surface_is_not_shipped_to_a_consumer()
+    {
+        // Every project under src/ references it, and a package reference is a consumer's
+        // dependency by default: one attribute stands between a build-time check and a Roslyn
+        // analyzer installed by everyone who installs an adapter — which would break the rule
+        // about not adding a dependency to a packable project with the thing added to keep the
+        // rule above. Only the packed manifest can say which of the two it is.
+        using Probe probe = new(
+            description: RealDescription,
+            source: DocumentedPublicType,
+            declaredApi: BridgeDeclared);
+
+        PackResult result = probe.Pack();
+
+        Assert.True(result.Succeeded, $"Pack should have succeeded:\n{result.Output}");
+
+        string package = Assert.Single(probe.ProducedPackages());
+        using ZipArchive archive = ZipFile.OpenRead(package);
+
+        string[] dependencies =
+        [
+            .. Manifest(archive)
+                .Descendants()
+                .Where(element => element.Name.LocalName == "dependency")
+                .Select(element => element.Attribute("id")?.Value ?? string.Empty),
+        ];
+
+        Assert.DoesNotContain(SurfaceAnalyzer, dependencies, StringComparer.OrdinalIgnoreCase);
+
+        // And none of it is carried inside the package either. The two are separate: an asset
+        // can be packed without being declared a dependency, and a consumer downloading a
+        // Roslyn analyzer with an adapter is the same surprise either way.
+        Assert.DoesNotContain(
+            archive.Entries,
+            entry => entry.FullName.Contains(SurfaceAnalyzer, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The <c>metadata</c> of the packed manifest. Read from the shipped artifact rather than
+    /// from the intermediate .nuspec beside it: what a consumer installs is the only copy of
+    /// this that matters.
+    /// </summary>
+    private static XElement Manifest(ZipArchive archive)
+    {
+        ZipArchiveEntry manifest = Assert.Single(
+            archive.Entries,
+            entry => entry.FullName.EndsWith(".nuspec", StringComparison.Ordinal));
+
+        using Stream content = manifest.Open();
+
+        return XDocument.Load(content).Root?.Elements().First()
+            ?? throw new InvalidOperationException("The packed .nuspec has no <metadata>.");
     }
 
     /// <summary>A nuspec metadata field, looked up by local name because the nuspec is namespaced.</summary>
@@ -258,12 +425,21 @@ public sealed class PackagingContractTests
     {
         private const string ProjectName = "PackagingProbe";
 
+        /// <summary>
+        /// <paramref name="declaredApi"/> is the whole of <c>PublicAPI.Unshipped.txt</c>, header
+        /// included; null means the project has neither baseline file, which is a state worth
+        /// probing rather than one to avoid. <paramref name="withShippedApi"/> exists only for the
+        /// case about a half-written baseline — every real project has both files, and the shipped
+        /// one is always empty here because nothing has been published from this repository.
+        /// </summary>
         public Probe(
             string? description,
             bool packable = true,
             bool withReadme = true,
             string? source = null,
-            string? exemptWarning = null)
+            string? exemptWarning = null,
+            string? declaredApi = null,
+            bool withShippedApi = true)
         {
             Root = Path.Combine(Path.GetTempPath(), $"rendlio-pack-{Guid.NewGuid():N}");
             Directory.CreateDirectory(Root);
@@ -281,12 +457,34 @@ public sealed class PackagingContractTests
             // to discovery, so that nothing above the temporary directory can join the build.
             string shared =
                 Path.Combine(RepositoryLayout.Root.FullName, "src", "Directory.Build.props");
+
+            // The settings above leave the version of every package to central management, and
+            // central management is found by walking up from the project — which from a temporary
+            // directory finds nothing. Named here, before the import, because the SDK reads this
+            // property after Directory.Build.props and before it goes looking on its own. Same
+            // file a real adapter would find by position; only the way it is reached differs.
+            string centralVersions =
+                Path.Combine(RepositoryLayout.Root.FullName, "Directory.Packages.props");
+
             File.WriteAllText(
                 Path.Combine(Root, "Directory.Build.props"),
                 "<Project>\n"
+                + "  <PropertyGroup>\n"
+                + $"    <DirectoryPackagesPropsPath>{centralVersions}</DirectoryPackagesPropsPath>\n"
+                + "  </PropertyGroup>\n"
                 + $"  <Import Project=\"{shared}\" />\n"
                 + exemption
                 + "</Project>\n");
+
+            // Where restore is allowed to look. A project under src/ gets this by position too,
+            // and it is not incidental: the config clears every inherited source and leaves
+            // nuget.org alone, which is how rule 2 is kept. Copied rather than skipped because
+            // these probes do restore a package now — the analyzer that reads the files below —
+            // and a probe resolving it through whatever feed a machine happens to have configured
+            // would be answering a question this repository does not ask.
+            File.Copy(
+                Path.Combine(RepositoryLayout.Root.FullName, "NuGet.config"),
+                Path.Combine(Root, "NuGet.config"));
 
             List<string> properties = ["    <TargetFramework>net10.0</TargetFramework>"];
             if (description is not null)
@@ -315,6 +513,20 @@ public sealed class PackagingContractTests
             if (source is not null)
             {
                 File.WriteAllText(Path.Combine(Root, "Bridge.cs"), source);
+            }
+
+            // Nothing marks these as AdditionalFiles: the analyzer package does that itself, and
+            // only for a file that exists — which is why "neither file" and "one file" are states
+            // a project can actually be in, and so states worth a test.
+            if (declaredApi is not null)
+            {
+                File.WriteAllText(Path.Combine(Root, "PublicAPI.Unshipped.txt"), declaredApi);
+
+                if (withShippedApi)
+                {
+                    File.WriteAllText(
+                        Path.Combine(Root, "PublicAPI.Shipped.txt"), NothingDeclared);
+                }
             }
         }
 

@@ -21,4 +21,13 @@
     <PackageVersion Include="xunit.runner.visualstudio" Version="3.1.0" />
   </ItemGroup>
 
+  <ItemGroup Label="Public API">
+    <!-- Not an upstream, so the range rule above has nothing to say about it: this runs at
+         build time and src/Directory.Build.props marks it private, so it never reaches a
+         consumer. Pinned exactly rather than as a range, like the test stack, because the
+         rules it enforces are part of what a build here means — a floating version could
+         change what the surface gate accepts under a change that meant only to restore. -->
+    <PackageVersion Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" Version="5.6.0" />
+  </ItemGroup>
+
 </Project>

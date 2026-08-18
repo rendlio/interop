@@ -42,6 +42,31 @@
     <None Include="$(MSBuildProjectDirectory)/README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
 
+  <ItemGroup Label="Public API">
+    <!-- Why a gate and not a review promise: a public member is permanent from the version
+         that first carried it, and until it is published there is nothing to catch it but
+         somebody noticing. Noticing is the wrong tool for the job — a new member reads as an
+         addition to a source file, which is the easiest kind of diff to nod through, and its
+         absence from any other file reads as nothing at all. This analyzer inverts that. A
+         project keeps PublicAPI.Shipped.txt and PublicAPI.Unshipped.txt beside its project
+         file; a public member missing from them fails the build, so widening the surface
+         means writing the line that widens it, in the same change, where it is the diff.
+
+         Nothing here marks those two files as AdditionalFiles: the package does it already,
+         and only when they exist, so a project that has none is not handed a path to a file
+         that is not there. A second include would be a duplicate rather than a belt.
+
+         What the analyzer then does — with both files, with one, with neither — is run rather
+         than assumed, in PackagingContractTests, because src/ holds no project yet and so
+         nothing else here ever executes it.
+
+         PrivateAssets keeps it a build-time tool. Without it the analyzer is a dependency of
+         every adapter, installed by everyone who installs one, and the rule about not adding
+         a dependency to a packable project is broken by the thing that keeps another promise.
+         That it is not is run too, against the packed manifest. -->
+    <PackageReference Include="Microsoft.CodeAnalysis.PublicApiAnalyzers" PrivateAssets="all" />
+  </ItemGroup>
+
   <Target Name="RendlioValidatePackageDescription" BeforeTargets="GenerateNuspec">
     <!-- Why an error rather than a convention in the README: the SDK supplies a placeholder
          description, so a package that sets none packs cleanly and the placeholder is what
