@@ -236,6 +236,58 @@ public sealed partial class PublicSurfaceRulesTests
     }
 
     /// <summary>
+    /// The wordings the rule above has to reach. Its reach is a character class rather than a
+    /// phrase, and the class is the substance of the rule: narrow it back to a plain space and
+    /// every other fixture here still passes, green, while the forms that actually put a claim
+    /// on a page walk through. Asserted here rather than left to the scan, because the scan can
+    /// only report on a tree that today contains none of them.
+    /// </summary>
+    [Theory]
+    [InlineData("The engine is open source.")]
+    [InlineData("The engine is open-source software.")]
+    [InlineData("Released as Open Source.")]
+    [InlineData("The engine is open\nsource under a permissive licence.")]
+    [InlineData("The engine is open **source**.")]
+    [InlineData("The engine was open sourced last year.")]
+    public void The_licence_rule_reaches_a_claim_however_it_is_typeset(string page)
+    {
+        Assert.Matches(OpenSourceClaimPattern(), page);
+    }
+
+    /// <summary>
+    /// And what it has to leave alone. These are the cost of the blanket ban, so they are the
+    /// part worth pinning: a gate that reddens a link to the licence list, or a sentence that
+    /// happens to end in "open", is one an author learns to route around instead of read.
+    /// </summary>
+    [Theory]
+    [InlineData("MIT, see https://opensource.org/licenses/MIT for the text.")]
+    [InlineData("The tool will reopen source files after a rebuild.")]
+    [InlineData("The format is open. Source files live under src/.")]
+    [InlineData("ClosedXML is MIT-licensed; the engine is source-available.")]
+    public void The_licence_rule_leaves_alone_what_is_not_a_claim(string page)
+    {
+        Assert.DoesNotMatch(OpenSourceClaimPattern(), page);
+    }
+
+    [Fact]
+    public void The_licence_rule_reads_across_a_list_boundary_and_that_is_accepted()
+    {
+        // The class bridges a line break and a marker, and a Markdown bullet is both — so two
+        // adjacent items, one ending in "open" and the next opening with "Source", read as a
+        // claim that nobody wrote.
+        //
+        // Left standing, deliberately. No such pair exists in the tree; narrowing the class to
+        // exclude it would cost the line break it exists for, since that is the same
+        // character; and the failure direction is the safe one — a false positive on a licence
+        // gate is one loud build and a reworded sentence, a false negative is a false licence
+        // claim on a public page. Pinned so the next person to meet it finds a decision on the
+        // record instead of a surprise, and can overturn it knowing what it was for.
+        Assert.Matches(
+            OpenSourceClaimPattern(),
+            "- the format is left open\n- Source files are read once");
+    }
+
+    /// <summary>
     /// Prose and code only: everything shipped except the files whose job is to name paths —
     /// see <see cref="PathNamingConfiguration"/>. Excluded by role rather than by shape,
     /// because the shape does not distinguish them: <c>Path.GetExtension(".gitignore")</c>
@@ -342,10 +394,16 @@ public sealed partial class PublicSurfaceRulesTests
     /// reaching for it.
     /// </para>
     /// <para>
-    /// A pattern rather than one more literal term, because the two words come apart: a wrap
-    /// puts a line break between them and emphasis puts a marker there. A literal search
-    /// reads both as clean, which is how the README-only assertion this replaces could have
-    /// been satisfied by the very sentence it existed to stop.
+    /// A pattern rather than one more literal term, because the phrase comes apart: a wrap
+    /// puts a line break between the two words, emphasis puts a marker there, and a hyphen
+    /// joins them into something no search for the phrase will find. The two assertions this
+    /// replaces each missed some of that. The README one read raw text, so all three forms
+    /// passed it — it could have been satisfied by the very sentence it existed to stop. The
+    /// UPSTREAM-PATCHES.md one normalised first and did catch the wrap and the marker, but the
+    /// hyphen went through it too, and neither ever read a third page.
+    /// <see cref="The_licence_rule_reaches_a_claim_however_it_is_typeset"/> pins the forms this
+    /// one has to reach, and <see cref="The_licence_rule_leaves_alone_what_is_not_a_claim"/>
+    /// the ones it must not.
     /// </para>
     /// </summary>
     [GeneratedRegex(@"\bopen[-\s*`]+source", RegexOptions.IgnoreCase)]

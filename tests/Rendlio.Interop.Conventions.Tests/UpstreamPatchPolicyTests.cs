@@ -213,9 +213,16 @@ public sealed partial class UpstreamPatchPolicyTests
         // than lean on the README carrying it.
         //
         // The matching half of the rule — that the inaccurate term never appears — moved to
-        // PublicSurfaceRulesTests, which holds it over every published page rather than this
-        // one, and matches through the line break or the emphasis marker that the literal
-        // search standing here would have read as clean.
+        // PublicSurfaceRulesTests. The search that stood here was not weak at what it did:
+        // Prose() normalises through Comparable(), so a line wrap and an emphasis marker both
+        // collapsed away and the phrase was caught through either. It was blind to the
+        // hyphenated spelling, which Comparable() leaves alone, and it only ever reached this
+        // one page. The rule that replaced it catches the hyphen and holds every page the
+        // repository publishes.
+        //
+        // Neither spelling is written out above, and cannot be. This file is shipped and is
+        // not one of the two sources that rule exempts, so quoting the phrase in order to
+        // discuss it is itself enough to redden it — as the first draft of this comment did.
         Assert.Contains("source-available", Prose(Policy), StringComparison.OrdinalIgnoreCase);
     }
 
