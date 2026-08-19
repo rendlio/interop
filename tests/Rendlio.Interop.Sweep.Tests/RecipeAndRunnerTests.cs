@@ -1,3 +1,4 @@
+using System.Globalization;
 using Rendlio.Interop.Sweep;
 using Rendlio.Interop.Sweep.Sources;
 using Xunit;
@@ -59,6 +60,38 @@ public sealed class RecipeAndRunnerTests
     public void A_recipe_that_would_not_run_is_refused_before_anything_runs(string json)
     {
         Assert.Throws<SweepException>(() => SweepRecipe.Parse(json));
+    }
+
+    [Theory]
+    [InlineData(SweepRecipe.MaximumTake, true)]
+    [InlineData(SweepRecipe.MaximumTake + 1, false)]
+    public void The_largest_page_the_registries_serve_is_allowed_and_one_more_is_not(int take, bool allowed)
+    {
+        // The cap is on the boundary rather than near it, because the failure it exists to
+        // prevent is silent: a registry handed a page size it does not serve returns a smaller
+        // page instead of refusing, and the candidates past the end read as having disappeared.
+        // A cap that was off by one would let exactly that through on every run.
+        string json =
+            $$"""
+            {
+              "name": "a-recipe",
+              "queries": [ { "id": "q1", "source": "CratesIo", "term": "pdf", "take": {{take}} } ]
+            }
+            """;
+
+        if (allowed)
+        {
+            Assert.Equal(take, Assert.Single(SweepRecipe.Parse(json).Queries).Take);
+
+            return;
+        }
+
+        SweepException failure = Assert.Throws<SweepException>(() => SweepRecipe.Parse(json));
+
+        Assert.Contains(
+            SweepRecipe.MaximumTake.ToString(CultureInfo.InvariantCulture),
+            failure.Message,
+            StringComparison.Ordinal);
     }
 
     [Fact]

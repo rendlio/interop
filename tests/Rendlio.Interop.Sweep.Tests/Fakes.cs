@@ -36,6 +36,20 @@ internal sealed class UnusedTransport : ISweepTransport
         throw new InvalidOperationException($"The run reached {uri} when it should not have.");
 }
 
+/// <summary>
+/// A transport that honours the token it was handed, the way a socket does. Standing in for one
+/// that ignored it would let a run under a cancelled token look like a run that finished.
+/// </summary>
+internal sealed class CancellingTransport : ISweepTransport
+{
+    public Task<string?> GetAsync(Uri uri, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        return Task.FromResult<string?>("""{"crates":[]}""");
+    }
+}
+
 /// <summary>Answers HTTP without a socket, and keeps the request it was handed.</summary>
 internal sealed class StubHandler(HttpStatusCode status = HttpStatusCode.OK, string body = "{}")
     : HttpMessageHandler

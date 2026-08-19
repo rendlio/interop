@@ -382,6 +382,33 @@ public sealed class RegistrySourceTests
         }
     }
 
+    [Fact]
+    public void Every_registry_has_a_wire_name_of_its_own()
+    {
+        // The wire name is half of every identity in the ledger, so a registry added without
+        // one would throw on its first candidate, and a registry added with a name another one
+        // already uses would silently fold two registries' packages into one row. Neither is
+        // visible in a diff of the enum, which is why this is a loop over it rather than a list.
+        HashSet<string> names = new(StringComparer.Ordinal);
+
+        foreach (SweepSource source in Enum.GetValues<SweepSource>())
+        {
+            string name = SweepSources.Name(source);
+
+            Assert.False(string.IsNullOrWhiteSpace(name));
+            Assert.True(names.Add(name), $"{source} shares its wire name with another registry.");
+            Assert.Equal($"{name}:a-package", Observation.Identify(source, "A-Package"));
+        }
+    }
+
+    [Fact]
+    public void A_registry_the_enum_does_not_have_is_not_given_a_name()
+    {
+        // A cast can produce one, and a name invented for it would be written into the ledger
+        // as though it meant something.
+        Assert.Throws<ArgumentOutOfRangeException>(() => SweepSources.Name((SweepSource)(-1)));
+    }
+
     private static IObservationSource Collector(SweepSource source, ISweepTransport transport) => source switch
     {
         SweepSource.CratesIo => new CratesIoSource(transport),
