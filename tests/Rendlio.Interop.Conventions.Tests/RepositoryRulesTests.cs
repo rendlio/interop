@@ -9,8 +9,6 @@ namespace Rendlio.Interop.Conventions.Tests;
 /// </summary>
 public sealed class RepositoryRulesTests
 {
-    private const string SolutionFileName = "Rendlio.Interop.slnx";
-
     private const string LicenceFollowsFunctionRule =
         "moat code = BUSL; funnel code = MIT/Apache";
 
@@ -22,24 +20,22 @@ public sealed class RepositoryRulesTests
     private const string VersionPinningRule =
         "ranges pin to certified upstream versions; widening requires a new certification run first";
 
-    private static readonly Lazy<DirectoryInfo> RepositoryRoot = new(FindRepositoryRoot);
-
     [Fact]
     public void Readme_quotes_the_licence_follows_function_rule_verbatim()
     {
-        Assert.Contains(LicenceFollowsFunctionRule, ReadRepositoryFile("README.md"), StringComparison.Ordinal);
+        Assert.Contains(LicenceFollowsFunctionRule, RepositoryLayout.ReadFile("README.md"), StringComparison.Ordinal);
     }
 
     [Fact]
     public void Readme_quotes_the_fork_rules_verbatim()
     {
-        Assert.Contains(ForkRules, ReadRepositoryFile("README.md"), StringComparison.Ordinal);
+        Assert.Contains(ForkRules, RepositoryLayout.ReadFile("README.md"), StringComparison.Ordinal);
     }
 
     [Fact]
     public void Readme_quotes_the_version_pinning_rule_verbatim()
     {
-        Assert.Contains(VersionPinningRule, ReadRepositoryFile("README.md"), StringComparison.Ordinal);
+        Assert.Contains(VersionPinningRule, RepositoryLayout.ReadFile("README.md"), StringComparison.Ordinal);
     }
 
     [Fact]
@@ -47,7 +43,7 @@ public sealed class RepositoryRulesTests
     {
         // The rendering engine is BUSL-licensed. "open source" would be inaccurate, so
         // "source-available" is the term used, and the wrong one must not creep back in.
-        string readme = ReadRepositoryFile("README.md");
+        string readme = RepositoryLayout.ReadFile("README.md");
 
         Assert.Contains("source-available", readme, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain("open source", readme, StringComparison.OrdinalIgnoreCase);
@@ -58,33 +54,9 @@ public sealed class RepositoryRulesTests
     {
         // Rule 1 in the README: everything in this repository is funnel code, so the only
         // licence it can carry is MIT.
-        string licence = ReadRepositoryFile("LICENSE");
+        string licence = RepositoryLayout.ReadFile("LICENSE");
 
         Assert.StartsWith("MIT License", licence, StringComparison.Ordinal);
         Assert.Contains("Permission is hereby granted, free of charge", licence, StringComparison.Ordinal);
-    }
-
-    private static string ReadRepositoryFile(string relativePath)
-    {
-        string path = Path.Combine(RepositoryRoot.Value.FullName, relativePath);
-        Assert.True(File.Exists(path), $"Expected '{relativePath}' at the repository root, but '{path}' does not exist.");
-
-        return File.ReadAllText(path);
-    }
-
-    private static DirectoryInfo FindRepositoryRoot()
-    {
-        for (DirectoryInfo? directory = new(AppContext.BaseDirectory);
-             directory is not null;
-             directory = directory.Parent)
-        {
-            if (File.Exists(Path.Combine(directory.FullName, SolutionFileName)))
-            {
-                return directory;
-            }
-        }
-
-        throw new InvalidOperationException(
-            $"Could not locate '{SolutionFileName}' in any directory above '{AppContext.BaseDirectory}'.");
     }
 }
