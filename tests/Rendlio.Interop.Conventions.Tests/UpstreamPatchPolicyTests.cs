@@ -36,6 +36,27 @@ public sealed partial class UpstreamPatchPolicyTests
         Assert.Contains($"({Policy})", RepositoryLayout.ReadFile("README.md"), StringComparison.Ordinal);
     }
 
+    /// <summary>
+    /// Guards the test below, and is the reason its answer can be believed. That test asserts
+    /// something about every link the page publishes, so a page that published none would
+    /// satisfy it while checking nothing — which is what a rewrite that dropped both links, or
+    /// moved them to reference style (<c>[rule 2][fork-rules]</c>, which
+    /// <see cref="RelativeLinkPattern"/> does not match), would quietly do. The page argues by
+    /// pointing, so losing the links costs it the authority it argues from — the exact failure
+    /// the test below was written to prevent, arriving by the one route that test cannot see.
+    ///
+    /// The two are named rather than counted, because a count is also satisfied by a rewrite
+    /// that swapped one authority for another without anyone deciding to.
+    /// </summary>
+    [Fact]
+    public void The_policy_publishes_the_two_links_it_argues_from()
+    {
+        List<(string Target, string Anchor)> links = LinksFrom(Policy).ToList();
+
+        Assert.Contains(("SUPPORT.md", string.Empty), links);
+        Assert.Contains(("README.md", "2-fork-rules"), links);
+    }
+
     [Fact]
     public void Every_link_the_policy_publishes_still_resolves()
     {
