@@ -50,10 +50,11 @@ could fix it not knowing there is anything to fix.
 | The upstream library — it is vulnerable with or without an adapter | Privately to that project, by whatever route it publishes. |
 | The rendering engine — reached through an adapter, but present without one | Privately to Rendlio Sheets rather than here. |
 
-**Working out which one it is is not your job.** If you cannot tell them apart, send it here
-privately: it is read, and you are told where it belongs. It is passed on only if you ask
-for that, because where a report goes next is a disclosure decision and the decision is
-yours. Guessing wrong costs you nothing.
+**Working out which one it is is not your job, and neither is finding somebody else's
+channel.** If you cannot tell them apart — or you can, and the route it points to is not one
+you can find — send it here privately: it is read, and you are told where it belongs. It is
+passed on only if you ask for that, because where a report goes next is a disclosure
+decision and the decision is yours. Guessing wrong costs you nothing.
 
 ## What happens next
 
@@ -85,8 +86,12 @@ passed. If you would rather wait for a fix, you are told when one is out.
 
 Where the repair belongs upstream it is sent upstream, and never worked around in a private
 copy — [rule 2](README.md#2-fork-rules) forbids the fork that would take, and a
-vulnerability is not an exception to it. What follows is then the upstream's own disclosure
-process, which is theirs to run rather than ours to hurry.
+vulnerability is not an exception to it. It travels by that project's own private security
+channel, and never as an ordinary public pull request: the [upstream patches
+policy](UPSTREAM-PATCHES.md) asks for an issue first and a small file that reproduces the
+defect, and for a vulnerability that file is the exploit and that issue is the disclosure.
+The public half of that policy resumes once the upstream has run its own process, which is
+theirs to run rather than ours to hurry.
 
 ## Which versions are covered
 

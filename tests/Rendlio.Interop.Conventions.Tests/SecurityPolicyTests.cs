@@ -20,21 +20,14 @@ public sealed partial class SecurityPolicyTests
     private const string TriagePolicy = "SUPPORT.md";
 
     /// <summary>
-    /// The route, sentence by sentence, as both pages have to give it. Two pages naming one
-    /// private channel is two places for it to drift, and the drift is silent: each page
-    /// reads correctly on its own while a reporter who arrived by the other one was told
-    /// something else. The fallback is on the list for a second reason — it is the half that
-    /// needs nothing switched on in repository settings, so it is what stops a prohibition
-    /// from being the only thing a reporter is left holding.
+    /// The section of each page that a reporter with something to send actually reads. They
+    /// are named separately because the two pages arrive at the same subject from different
+    /// directions: here it is the whole point of the document, there it is one section of a
+    /// triage policy.
     /// </summary>
-    private static readonly string[] SharedRoute =
-    [
-        "do not open a public one describing it",
-        "this repository's Security tab (Report a vulnerability)",
-        "no detail, no reproduction, no file",
-    ];
+    private const string RouteSection = "Reporting a vulnerability";
 
-    public static TheoryData<string> SharedRouteClaims() => [.. SharedRoute];
+    private const string TriageRouteSection = "Security";
 
     [Fact]
     public void The_policy_is_published_at_the_repository_root()
@@ -90,15 +83,32 @@ public sealed partial class SecurityPolicyTests
         }
     }
 
+    /// <summary>
+    /// The route, sentence by sentence, as both pages have to give it — and have to give it
+    /// in the section a reporter reads rather than merely somewhere on the page. Two pages
+    /// naming one private channel is two places for it to drift, and the drift is silent:
+    /// each page reads correctly on its own while a reporter who arrived by the other one was
+    /// told something else. The scoping is what makes the middle claim mean anything, since
+    /// it is the only one of the three that names the channel: asserted against a whole page
+    /// it would stay green while the channel migrated out from under the prohibition it
+    /// answers, leaving that section barring the public route and offering nothing in its
+    /// place. The fallback is on the list for a third reason — it is the half that needs
+    /// nothing switched on in repository settings.
+    /// </summary>
     [Theory]
-    [MemberData(nameof(SharedRouteClaims))]
+    [InlineData("do not open a public one describing it")]
+    [InlineData("this repository's Security tab (Report a vulnerability)")]
+    [InlineData("no detail, no reproduction, no file")]
     public void Both_pages_send_a_reporter_by_the_same_route(string claim)
     {
         // Asserted of both pages in one test on purpose: what matters is not that either one
         // says it but that they agree, and two tests that each check one page would pass
         // individually while the pair of them contradicted each other.
-        Assert.Contains(claim, Prose(Policy), StringComparison.OrdinalIgnoreCase);
-        Assert.Contains(claim, Prose(TriagePolicy), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(claim, Section(Policy, RouteSection), StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            claim,
+            Section(TriagePolicy, TriageRouteSection),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -127,9 +137,18 @@ public sealed partial class SecurityPolicyTests
         // The routing table describes how the work is divided; it is not a quiz to pass
         // before reporting. Without the catch-all, someone who cannot tell either sends it
         // nowhere or sends it everywhere, and one of those is a public disclosure.
-        string section = Section("Where a vulnerability belongs");
+        //
+        // The second half covers the reporter the first half does not: someone who knows
+        // exactly whose defect it is, goes looking for that project's private channel, and
+        // finds none published. The table sends two of its three rows somewhere we do not
+        // control, so it cannot promise those routes exist — which makes the way back here
+        // the part that has to be promised instead. A reporter holding a private-only
+        // instruction and no private route posts in public.
+        string section = Section(Policy, "Where a vulnerability belongs");
 
         Assert.Contains("Working out which one it is is not your job", section, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("neither is finding somebody else's channel", section, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("the route it points to is not one you can find", section, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("Guessing wrong costs you nothing", section, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -140,7 +159,7 @@ public sealed partial class SecurityPolicyTests
         // which hands us a decision that is not ours to make: passing it on is a disclosure,
         // to an audience the reporter did not choose. Being trusted with a report does not
         // buy the right to make that call for them.
-        string section = Section("Where a vulnerability belongs");
+        string section = Section(Policy, "Where a vulnerability belongs");
 
         Assert.Contains("passed on only if you ask for that", section, StringComparison.OrdinalIgnoreCase);
     }
@@ -165,7 +184,7 @@ public sealed partial class SecurityPolicyTests
         // to move is a deadline we would ask to move, repeatedly, and there is no way for a
         // reporter to refuse that costs them nothing — so it is given away here in advance,
         // where nobody is under pressure yet.
-        string section = Section("Disclosure");
+        string section = Section(Policy, "Disclosure");
 
         Assert.Contains("The timetable is yours", section, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("you will not be asked to move it", section, StringComparison.OrdinalIgnoreCase);
@@ -178,10 +197,22 @@ public sealed partial class SecurityPolicyTests
         // Rule 2, at the point of maximum temptation to make an exception to it: a quiet
         // patch to a private copy looks responsible under time pressure, and it is how a
         // fork begins. The page has to keep saying that urgency is not a licence to fork.
-        string section = Section("Disclosure");
+        //
+        // The privacy half is pinned with it, and is the half that could actually leak.
+        // "Sent upstream" on its own resolves, through this page's own cross-reference, to
+        // the route the upstream patches policy describes — an issue first and a small file
+        // that reproduces the defect — and for a vulnerability that file is the exploit. The
+        // sentence that stops rule 2 being broken quietly would otherwise be the sentence
+        // that publishes the thing, so neither claim is safe to pin without the other.
+        string section = Section(Policy, "Disclosure");
 
         Assert.Contains("it is sent upstream", section, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("never worked around in a private copy", section, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains("that project's own private security channel", section, StringComparison.OrdinalIgnoreCase);
+        Assert.Contains(
+            "never as an ordinary public pull request",
+            section,
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -190,20 +221,36 @@ public sealed partial class SecurityPolicyTests
         // The question a consumer asks the moment an advisory lands, and the one a page like
         // this is most often silent on. Settled while nothing has shipped, because the same
         // question asked during an incident gets answered by whoever is most tired.
-        string section = Section("Which versions are covered");
+        string section = Section(Policy, "Which versions are covered");
 
         Assert.Contains("a new release of the affected package", section, StringComparison.OrdinalIgnoreCase);
         Assert.Contains("not patched in place", section, StringComparison.OrdinalIgnoreCase);
     }
 
-    /// <summary>The named section, up to the next heading, as comparable prose.</summary>
-    private static string Section(string heading)
+    /// <summary>
+    /// The named section of a page, up to the next heading, as comparable prose. Takes the
+    /// page rather than assuming the policy, because the claim that both pages give one route
+    /// is only worth making about the section each of them gives it in.
+    /// </summary>
+    /// <remarks>
+    /// This helper, <see cref="Normalise"/> and <see cref="ServiceLevelPattern"/> are near
+    /// copies of ones <see cref="SupportPolicyTests"/> keeps, and are deliberately not shared
+    /// with it. Two pages made the same promises separately and either may be rewritten
+    /// without the other, so each fixture has to be able to change its mind alone. Sharing
+    /// would also make one fixture's idea of what a deadline looks like binding on a page it
+    /// never reads — and the day the two need to differ is the day somebody widens the shared
+    /// copy to suit whichever page they happen to be editing, quietly loosening the other. It
+    /// is the same reasoning <see cref="PrivateTreePolicyTests"/> gives for naming the private
+    /// tree itself rather than borrowing the constant, and <see cref="PublicSurfaceRulesTests"/>
+    /// for asking git for the tracked paths a second time.
+    /// </remarks>
+    private static string Section(string relativePath, string heading)
     {
-        string text = Normalise(RepositoryLayout.ReadFile(Policy));
+        string text = Normalise(RepositoryLayout.ReadFile(relativePath));
         string marker = $"## {heading}";
         int start = text.IndexOf(marker, StringComparison.Ordinal);
 
-        Assert.True(start >= 0, $"The policy has no '{marker}' section.");
+        Assert.True(start >= 0, $"'{relativePath}' has no '{marker}' section.");
 
         int next = text.IndexOf("\n## ", start + marker.Length, StringComparison.Ordinal);
 
