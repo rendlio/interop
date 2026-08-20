@@ -79,6 +79,15 @@ public sealed partial class PublicSurfaceRulesTests
         Assert.Contains("README.md", names, StringComparer.Ordinal);
         Assert.Contains("LICENSE", names, StringComparer.Ordinal);
         Assert.Contains(".github/workflows/ci.yml", names, StringComparer.Ordinal);
+
+        // UPSTREAM-PATCHES.md is named for the reason the other three are, and for one more:
+        // it no longer carries its own copy of the licence ban. UpstreamPatchPolicyTests keeps
+        // only the half that says the accurate term is present, and leaves the half that says
+        // the inaccurate one is absent to the scan here. That delegation rests on this page
+        // being in this set, and nothing else would notice it leaving — that fixture reaches
+        // the file directly rather than through the scan, so it stays green either way, and
+        // the ban would lapse silently for the page written to be pasted somewhere else.
+        Assert.Contains("UPSTREAM-PATCHES.md", names, StringComparer.Ordinal);
     }
 
     [Fact]
