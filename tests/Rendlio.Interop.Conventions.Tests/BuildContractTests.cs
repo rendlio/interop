@@ -207,6 +207,52 @@ public sealed partial class BuildContractTests
     }
 
     [Fact]
+    public void No_page_this_repository_publishes_names_it_at_a_different_address()
+    {
+        // The theory above pins the property against a constant in this file, and
+        // PackagingContractTests pins it a third time against a manifest it packs. Three copies of
+        // one value agree with each other whatever it says — which is how a guessed address
+        // reached main and stayed there, green, until an operator ruled on it by hand. None of the
+        // three can see a fourth copy left somewhere else, so this asks the published tree instead
+        // of any one setting: whatever names this organisation names it once, correctly.
+        //
+        // Every rendlio address rather than the one superseded spelling. A stale copy is only the
+        // mistake that has already been made; banning the string that caused it would not reach the
+        // next one, and the ruling fixes an exact address — no .git suffix, no other casing, https
+        // — each of which a ban on one spelling walks straight past. A genuine link to a sibling
+        // repository reddens this, deliberately: that is one line widened here on purpose, against
+        // a wrong address on a package page, which stays wrong in every version that carried it.
+        //
+        // A schemeless mention in prose is left alone. What is being guarded is an address
+        // something follows, and those carry a scheme.
+        List<string> named = [];
+        List<string> offenders = [];
+
+        foreach (string file in RepositoryLayout.EnumerateShippedFiles())
+        {
+            foreach (Match match in RendlioRepositoryPattern().Matches(File.ReadAllText(file)))
+            {
+                string where = $"  {RepositoryLayout.Describe(file)}: \"{match.Value}\"";
+
+                (string.Equals(match.Value, RepositoryHome, StringComparison.Ordinal)
+                    ? named
+                    : offenders).Add(where);
+            }
+        }
+
+        Assert.True(
+            offenders.Count == 0,
+            $"A published file names a rendlio repository at an address that is not this one "
+            + $"({RepositoryHome}). Correct it — or, if it really is a sibling such as the "
+            + $"analyzers repository, widen this rule on purpose:"
+            + Environment.NewLine + string.Join(Environment.NewLine, offenders));
+
+        // Guards the walk above, which finding nothing would satisfy just as well. The props are
+        // named rather than any file, because that copy is the one that reaches a consumer.
+        Assert.Contains(named, where => where.Contains(PackagingProps, StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void Every_package_ships_a_page_of_its_own()
     {
         // PackageReadmeFile only names the file; the item is what puts it in the package.
@@ -493,4 +539,20 @@ public sealed partial class BuildContractTests
     /// <summary>Cancellation with nothing deciding when it applies.</summary>
     [GeneratedRegex(@"cancel-in-progress:\s*true\b")]
     private static partial Regex UnconditionalCancelPattern();
+
+    /// <summary>
+    /// Any address under this organisation, so that the test can compare what it finds against
+    /// the one that is right rather than search for spellings that are wrong.
+    /// <para>
+    /// Case-insensitive, and the scheme is part of the match, because both are things the
+    /// address can drift in while still resolving on the forge — and the ruling fixes the
+    /// string, not what happens to redirect to it. The name ends on a letter or digit so that
+    /// the full stop closing a sentence is not read as part of it, while a <c>.git</c> suffix,
+    /// which ends on a letter, still is: that suffix is one of the things ruled out. A path
+    /// below the repository — <c>/issues</c>, a blob — stops the match at the repository name
+    /// and so reads as this repository, which is what a deep link into it is.
+    /// </para>
+    /// </summary>
+    [GeneratedRegex(@"https?://github\.com/rendlio/[A-Za-z0-9._-]*[A-Za-z0-9]", RegexOptions.IgnoreCase)]
+    private static partial Regex RendlioRepositoryPattern();
 }
