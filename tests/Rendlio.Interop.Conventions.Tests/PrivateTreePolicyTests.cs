@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Xunit;
 
 namespace Rendlio.Interop.Conventions.Tests;
@@ -23,6 +24,21 @@ public sealed class PrivateTreePolicyTests
     private const string PrivateWorkingTree = ".conductor";
 
     private const string IgnoreFile = ".gitignore";
+
+    /// <summary>
+    /// A path shaped like the notes that are actually written. The rule names a directory,
+    /// and git applies a directory rule to what is under it rather than to the bare name, so
+    /// the probe has to reach inside the tree to ask the question that matters.
+    /// </summary>
+    private const string NoteInPrivateTree = $"{PrivateWorkingTree}/working-notes/probe.md";
+
+    /// <summary>
+    /// How <c>git check-ignore</c> answers: the verdict is the process exit status, and any
+    /// other status is the query itself having failed rather than an answer.
+    /// </summary>
+    private const int Ignored = 0;
+
+    private const int NotIgnored = 1;
 
     [Fact]
     public void The_ignore_file_parses_into_individual_rules()
@@ -61,6 +77,37 @@ public sealed class PrivateTreePolicyTests
     }
 
     /// <summary>
+    /// Guards the test below, and is the reason its answer can be believed. A query that
+    /// reported "ignored" for everything — because git never started, ran against some other
+    /// directory, or was asked a question it does not answer the way this assumes — would
+    /// satisfy that test while checking nothing. This asks the same question about a file the
+    /// repository publishes and requires the opposite answer.
+    /// </summary>
+    [Fact]
+    public void The_ignore_query_reports_a_published_file_as_not_ignored()
+    {
+        (int verdict, string source) = IgnoreQuery("README.md");
+
+        Assert.Equal(NotIgnored, verdict);
+        Assert.Equal(string.Empty, source);
+    }
+
+    [Fact]
+    public void Git_ignores_a_note_written_to_the_private_working_tree()
+    {
+        // The tests above read the file; this one asks git, and git's answer is the claim
+        // that protects anything. A rule can be spelled so that it reads correctly to a
+        // person and matches nothing, and precedence is settled across more than one file.
+        // The source of the answer is asserted with the answer for that second reason: a
+        // rule in one machine's own global ignore file would otherwise stand in for the rule
+        // this repository has to carry itself, and pass here while a fresh clone leaks.
+        (int verdict, string source) = IgnoreQuery(NoteInPrivateTree);
+
+        Assert.Equal(Ignored, verdict);
+        Assert.StartsWith($"{IgnoreFile}:", source, StringComparison.Ordinal);
+    }
+
+    /// <summary>
     /// The rules git evaluates: commentary and blank lines dropped, surrounding whitespace
     /// and line endings left out of it so a reformat of the file is not a failure.
     /// </summary>
@@ -85,4 +132,44 @@ public sealed class PrivateTreePolicyTests
             .Replace("**/", string.Empty, StringComparison.Ordinal)
             .Trim('/')
             .Equals(PrivateWorkingTree, StringComparison.Ordinal);
+
+    /// <summary>
+    /// Asks git whether it would ignore <paramref name="relativePath"/>, and returns the
+    /// verdict together with the rule that produced it. The index is deliberately left out of
+    /// the question: the claim is about the rules this repository carries, not about which
+    /// paths happen to be committed on the branch under test.
+    /// </summary>
+    private static (int Verdict, string Source) IgnoreQuery(string relativePath)
+    {
+        string[] arguments = ["check-ignore", "--no-index", "--verbose", "--", relativePath];
+
+        ProcessStartInfo start = new("git")
+        {
+            WorkingDirectory = RepositoryLayout.Root.FullName,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+        };
+
+        foreach (string argument in arguments)
+        {
+            start.ArgumentList.Add(argument);
+        }
+
+        using Process git = Process.Start(start)
+            ?? throw new InvalidOperationException(
+                "Could not start 'git'. This fixture asks git what it does with the private "
+                + "working tree, so the suite has to run from a checkout with git available.");
+
+        // One line at most either way, so neither pipe can fill and stall the process.
+        string source = git.StandardOutput.ReadToEnd().Trim();
+        string failure = git.StandardError.ReadToEnd().Trim();
+        git.WaitForExit();
+
+        Assert.True(
+            git.ExitCode is Ignored or NotIgnored,
+            $"'git {string.Join(' ', arguments)}' did not answer: it exited with "
+            + $"{git.ExitCode}. {failure}");
+
+        return (git.ExitCode, source);
+    }
 }
