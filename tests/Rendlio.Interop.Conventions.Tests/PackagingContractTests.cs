@@ -187,7 +187,7 @@ public sealed class PackagingContractTests
 
         Assert.Equal(RealDescription, Field(metadata, "description"));
         Assert.NotEqual(SdkPlaceholder, Field(metadata, "description"));
-        Assert.Equal("https://github.com/rendlio/rendlio-interop", Field(metadata, "projectUrl"));
+        Assert.Equal("https://github.com/rendlio/interop", Field(metadata, "projectUrl"));
         Assert.Equal("MIT", Field(metadata, "license"));
 
         // Written semicolon-separated in the props; NuGet stores them separated by spaces.

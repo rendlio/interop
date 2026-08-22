@@ -22,7 +22,7 @@
          per project — or, as happens by default, left for the SDK to fill in. Description is
          deliberately absent: it describes one package, so the target below refuses to pack
          until the project supplies its own. -->
-    <PackageProjectUrl>https://github.com/rendlio/rendlio-interop</PackageProjectUrl>
+    <PackageProjectUrl>https://github.com/rendlio/interop</PackageProjectUrl>
     <!-- A project adds its upstream to these rather than replacing them:
          <PackageTags>$(PackageTags);some-upstream</PackageTags>. -->
     <PackageTags>rendlio;rendlio-sheets;spreadsheet;interop;adapter</PackageTags>

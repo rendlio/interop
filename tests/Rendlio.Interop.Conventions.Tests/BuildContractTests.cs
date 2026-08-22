@@ -36,7 +36,12 @@ public sealed partial class BuildContractTests
     /// <summary>How a workflow drops the audit exemption for the length of its own run.</summary>
     private const string AuditPromotion = "-p:WarningsNotAsErrors=";
 
-    private const string RepositoryHome = "https://github.com/rendlio/rendlio-interop";
+    /// <summary>
+    /// Where this repository is published: organisation <c>rendlio</c>, repository
+    /// <c>interop</c>, no <c>.git</c> suffix. The organisation is not repeated inside the
+    /// repository name — the sibling repository publishes as <c>rendlio/analyzers</c>.
+    /// </summary>
+    private const string RepositoryHome = "https://github.com/rendlio/interop";
 
     /// <summary>Shared tags; a project appends its upstream rather than replacing these.</summary>
     private const string SharedPackageTags = "rendlio;rendlio-sheets;spreadsheet;interop;adapter";
