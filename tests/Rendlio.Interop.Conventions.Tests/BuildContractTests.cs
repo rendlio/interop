@@ -42,6 +42,13 @@ public sealed partial class BuildContractTests
     /// </summary>
     private const string DescriptionProperty = "$(PackageDescription)";
 
+    /// <summary>
+    /// The opt-out a project under <c>src/</c> uses to decline to ship. The description guard
+    /// has to test it, because a <c>BeforeTargets</c> hook runs even when the target it
+    /// precedes is skipped by its own condition.
+    /// </summary>
+    private const string PackableProperty = "$(IsPackable)";
+
     [Theory]
     [InlineData("Nullable", "enable")]
     [InlineData("TreatWarningsAsErrors", "true")]
@@ -102,18 +109,29 @@ public sealed partial class BuildContractTests
         // missing, which is the point.
         Assert.Equal("README.md", Property(PackagingProps, "PackageReadmeFile"));
 
-        XElement packed = Document(PackagingProps)
-            .Descendants("None")
-            .SingleOrDefault(none =>
-                none.Attribute("Include")?.Value.EndsWith("README.md", StringComparison.Ordinal) == true)
-            ?? throw new InvalidOperationException(
-                $"{PackagingProps} names a package readme but no longer packs one.");
+        List<XElement> packed =
+        [
+            .. Document(PackagingProps)
+                .Descendants("None")
+                .Where(none =>
+                    none.Attribute("Include")?.Value.EndsWith("README.md", StringComparison.Ordinal) == true),
+        ];
 
-        Assert.Equal("true", packed.Attribute("Pack")?.Value);
+        // Exactly one, named rather than counted implicitly: two would be the shape of a
+        // second readme item added later, and pack would then have to choose between them.
+        Assert.True(
+            packed.Count == 1,
+            $"{PackagingProps} should pack exactly one README, but packs {packed.Count}.");
+
+        Assert.Equal("true", packed[0].Attribute("Pack")?.Value);
         Assert.Contains(
             "MSBuildProjectDirectory",
-            packed.Attribute("Include")?.Value ?? string.Empty,
+            packed[0].Attribute("Include")?.Value ?? string.Empty,
             StringComparison.Ordinal);
+
+        // Coupled to PackageReadmeFile above, which names a path relative to the package
+        // root: pack it anywhere else and the name no longer resolves.
+        Assert.Equal("/", packed[0].Attribute("PackagePath")?.Value);
     }
 
     [Fact]
@@ -123,15 +141,25 @@ public sealed partial class BuildContractTests
         // centrally — and the SDK's default for it packs without complaint, which is how
         // placeholder text reaches a public package page. This is the only place that
         // omission can be caught, so it is caught as a failed pack.
-        XElement guard = Document(PackagingProps)
-            .Descendants("Target")
-            .Where(target => target.Attribute("BeforeTargets")?.Value == "GenerateNuspec")
-            .Elements("Error")
-            .SingleOrDefault()
-            ?? throw new InvalidOperationException(
-                $"{PackagingProps} no longer fails the pack of a package that sets no Description.");
+        List<XElement> guards =
+        [
+            .. Document(PackagingProps)
+                .Descendants("Target")
+                .Where(target => target.Attribute("BeforeTargets")?.Value == "GenerateNuspec")
+                .Elements("Error"),
+        ];
 
-        string condition = guard.Attribute("Condition")?.Value ?? string.Empty;
+        Assert.True(
+            guards.Count == 1,
+            $"{PackagingProps} should fail the pack of a package that sets no description in "
+            + $"exactly one place, but {guards.Count} were found.");
+
+        string condition = guards[0].Attribute("Condition")?.Value ?? string.Empty;
+
+        // A project under src/ may decline to ship, and MSBuild runs a BeforeTargets hook
+        // even when the target it precedes is skipped by its own condition. Without this the
+        // guard demands a description from a project that produces no package.
+        Assert.Contains(PackableProperty, condition, StringComparison.Ordinal);
 
         // On the property pack reads, not on Description. The two are not interchangeable:
         // the SDK defaults this one from Description, so guarding it accepts a project that

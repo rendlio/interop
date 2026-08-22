@@ -54,9 +54,15 @@
          that sets either one passes — whereas testing Description would reject a project
          that legitimately set only PackageDescription. It is also where the placeholder
          actually lands; unset, Description evaluates to empty rather than to the
-         placeholder. -->
+         placeholder.
+
+         Why IsPackable is tested here too: MSBuild runs a BeforeTargets hook even when the
+         target it precedes is skipped by its own condition, and GenerateNuspec is
+         conditioned on IsPackable. Without this, a project under src/ that legitimately
+         declines to ship would fail pack with a demand for a description of a package it
+         never produces. -->
     <Error
-      Condition=" '$(PackageDescription)' == '' or '$(PackageDescription)' == 'Package Description' "
+      Condition=" '$(IsPackable)' == 'true' and ('$(PackageDescription)' == '' or '$(PackageDescription)' == 'Package Description') "
       Text="$(MSBuildProjectName) packs without a description of its own, so its package page would read &quot;Package Description&quot;. Set &lt;Description&gt; in the project file to one or two sentences naming the upstream this adapter bridges." />
   </Target>
 
