@@ -552,7 +552,19 @@ public sealed partial class BuildContractTests
     /// below the repository — <c>/issues</c>, a blob — stops the match at the repository name
     /// and so reads as this repository, which is what a deep link into it is.
     /// </para>
+    /// <para>
+    /// <c>CultureInvariant</c> is written rather than relied upon. Turkish folds <c>I</c> to a
+    /// dotless letter, so a case-insensitive match built against that culture stops seeing
+    /// <c>RENDLIO</c> as this organisation — and it is the drifted spellings, the ones this
+    /// exists to catch, that are the ones carrying a capital <c>I</c>. The source generator as
+    /// it stands resolves casing when it compiles the pattern rather than when the culture is
+    /// read, so this is already invariant without the flag; that is a property of the
+    /// generator, not a promise it makes, and the failure it would leave behind is a gate
+    /// reporting green on the machines of one locale.
+    /// </para>
     /// </summary>
-    [GeneratedRegex(@"https?://github\.com/rendlio/[A-Za-z0-9._-]*[A-Za-z0-9]", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(
+        @"https?://github\.com/rendlio/[A-Za-z0-9._-]*[A-Za-z0-9]",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
     private static partial Regex RendlioRepositoryPattern();
 }
