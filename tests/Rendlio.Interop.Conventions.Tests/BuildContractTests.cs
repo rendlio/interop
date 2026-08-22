@@ -26,8 +26,6 @@ public sealed partial class BuildContractTests
 
     private const string SolutionFileName = "Rendlio.Interop.slnx";
 
-    private const string WorkflowDirectory = ".github/workflows";
-
     private const string PackagingProps = "src/Directory.Build.props";
 
     private const string SolutionProps = "Directory.Solution.props";
@@ -432,12 +430,15 @@ public sealed partial class BuildContractTests
             + "point of it.");
     }
 
-    /// <summary>Every CI workflow, as a repository-relative path and its text.</summary>
+    /// <summary>
+    /// Every CI workflow, as a repository-relative path and its text. Enumerated by
+    /// <see cref="RepositoryLayout"/> rather than here, because <see cref="SdkPinTests"/> holds
+    /// rules about workflows too: two fixtures listing them separately would be two answers to
+    /// "what is a workflow here", and the rules that use this only bind while they cover all
+    /// of them.
+    /// </summary>
     private static IEnumerable<(string Name, string Text)> Workflows() =>
-        Directory
-            .EnumerateFiles(Path.Combine(RepositoryLayout.Root.FullName, WorkflowDirectory), "*.y*ml")
-            .Order(StringComparer.Ordinal)
-            .Select(path => (RepositoryLayout.Describe(path), File.ReadAllText(path)));
+        RepositoryLayout.EnumerateWorkflows();
 
     /// <summary>The projects the solution builds, as repository-relative paths.</summary>
     private static IEnumerable<string> SolutionProjects() =>

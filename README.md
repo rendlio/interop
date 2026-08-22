@@ -21,6 +21,7 @@ adapter landing here has to follow.
 | `tests/` | Test projects. |
 | `tools/` | Tooling run from a checkout, never packed — see [Rendlio.Interop.Sweep](tools/Rendlio.Interop.Sweep/README.md). |
 | `docs/` | Specifications that bind what may land here — see the [adapter API specification](docs/adapter-api.md), which fixes the surface every `Rendlio.Interop.*` package exposes. |
+| `global.json` | The SDK pin: the exact version CI installs, and the one feature band a build here may resolve — see Building below for why it is held that tightly. |
 | `Directory.Build.props` | Shared build settings: nullable enabled, warnings as errors. |
 | `Directory.Solution.props` | What a solution build needs settled before any project loads — see the file for why an inherited `Platform` would otherwise stop one. |
 | `Directory.Packages.props` | Central package versions — where rule 3 is enforced. |
@@ -34,14 +35,26 @@ adapter landing here has to follow.
 
 ## Building
 
+Requires a .NET SDK from the `10.0.4xx` feature band. `global.json` pins `10.0.400` and rolls
+forward only inside that band, so a machine that does not have it stops with a message naming
+what to install rather than quietly building against something else.
+
 ```sh
 dotnet restore
 dotnet build
 dotnet test
 ```
 
-The SDK version is pinned in `global.json`. Formatting is checked with
-`dotnet format --verify-no-changes`, which CI runs too.
+That strictness is what makes one commit mean one verdict. The analyzers that decide whether
+this repository compiles ship inside the SDK, a different feature band bundles a different rule
+set, and warnings are errors here — so a band left free to drift is a change that is green in
+CI and red on a contributor's desk with nothing in the diff to explain it. The two ends read
+the pin differently and cannot be left to agree by luck: CI installs the exact version named
+here and never applies the roll-forward policy, while the SDK on a contributor's machine
+applies that policy to whatever is already installed. Holding it inside one band is what makes
+both ends resolve the same SDK by construction.
+
+Formatting is checked with `dotnet format --verify-no-changes`, which CI runs too.
 
 Warnings are errors, with one deliberate exception: the NuGet audit warnings NU1901–NU1904
 stay warnings. They report on an advisory database that changes without anyone committing

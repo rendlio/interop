@@ -10,6 +10,8 @@ internal static class RepositoryLayout
 {
     private const string SolutionFileName = "Rendlio.Interop.slnx";
 
+    private const string WorkflowDirectory = ".github/workflows";
+
     /// <summary>
     /// Directory names pruned whatever git says about them. Nothing listed here is normally
     /// tracked — build output and the private working trees are all ignored — so this is a
@@ -87,6 +89,19 @@ internal static class RepositoryLayout
     /// <see cref="GeneratedFileNames"/> — as are the private trees.
     /// </summary>
     public static IReadOnlyList<string> EnumerateShippedFiles() => LazyShippedFiles.Value;
+
+    /// <summary>
+    /// Every CI workflow, as a repository-relative path and its text. Shared for the same
+    /// reason the shipped set is: more than one fixture holds rules about what a workflow may
+    /// do, and a rule that enumerated its own subset would be one a workflow could be added
+    /// outside of. Read from the directory rather than from a list, so a workflow added later
+    /// is covered by every such rule without anyone remembering to add it.
+    /// </summary>
+    public static IEnumerable<(string Name, string Text)> EnumerateWorkflows() =>
+        Directory
+            .EnumerateFiles(Path.Combine(Root.FullName, WorkflowDirectory), "*.y*ml")
+            .Order(StringComparer.Ordinal)
+            .Select(path => (Describe(path), File.ReadAllText(path)));
 
     /// <summary>The repository-relative path, for readable assertion messages.</summary>
     public static string Describe(string absolutePath) =>
