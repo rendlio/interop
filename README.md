@@ -23,6 +23,7 @@ adapter landing here has to follow.
 | `Directory.Packages.props` | Central package versions — where rule 3 is enforced. |
 | `NuGet.config` | Restore resolves from nuget.org only, so an upstream is always the published package. |
 | `.github/workflows/ci.yml` | Build and test on every push and pull request. |
+| `SUPPORT.md` | What is in scope here, how a bug is routed, and what a response looks like. |
 
 ## Building
 
@@ -88,6 +89,10 @@ moves afterwards. Narrowing a range needs no run and can happen at any time.
 - Run `dotnet format --verify-no-changes` before opening a pull request.
 - Do not add a dependency to a packable project without saying why in the pull request — it
   becomes a transitive dependency for everyone who installs the package.
+
+Before opening an issue or a pull request, read the [support and triage policy](SUPPORT.md).
+It says what is in scope, how an upstream bug is told apart from an adapter bug, and what
+you can expect afterwards.
 
 ## Licence
 
