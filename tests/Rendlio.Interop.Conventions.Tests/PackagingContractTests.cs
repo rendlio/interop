@@ -85,6 +85,19 @@ public sealed class PackagingContractTests
         + "    public static int Rows => 0;\n"
         + "}\n";
 
+    /// <summary>
+    /// The same type again, one member lighter — a removal, which is the shape a source diff
+    /// gives no signal about at all. Nothing here is wrong on its own; it is only wrong beside
+    /// a surface that still records the member.
+    /// </summary>
+    private const string DocumentedPublicTypeMinusAMember =
+        "namespace Probe;\n"
+        + "\n"
+        + "/// <summary>Bridges an upstream workbook onto the model.</summary>\n"
+        + "public sealed class Bridge\n"
+        + "{\n"
+        + "}\n";
+
     /// <summary>The analyzer that reads the two baseline files, by the id a .nuspec would use.</summary>
     private const string SurfaceAnalyzer = "Microsoft.CodeAnalysis.PublicApiAnalyzers";
 
@@ -357,6 +370,51 @@ public sealed class PackagingContractTests
     }
 
     [Fact]
+    public void A_surface_recorded_as_shipped_builds()
+    {
+        // Every case above records the surface in the unshipped half, because nothing has been
+        // published from this repository yet. That leaves the other half of the arrangement —
+        // the half the README describes as a member moving across when the version carrying it
+        // publishes — resting on nobody having tried it. The two files are read by the same
+        // analyzer but they are two files, and a project reaches this state exactly once, on
+        // the release where being wrong is most expensive.
+        using Probe probe = new(
+            description: RealDescription,
+            source: DocumentedPublicType,
+            declaredApi: NothingDeclared,
+            shippedApi: BridgeDeclared);
+
+        PackResult result = probe.Build();
+
+        Assert.True(result.Succeeded, $"Build should have succeeded:\n{result.Output}");
+    }
+
+    [Fact]
+    public void A_member_the_shipped_surface_records_and_the_code_drops_does_not_build()
+    {
+        // The direction the rest of this fixture does not cover, and the one the word
+        // "permanent" actually rests on. Every case above asks whether the surface can grow
+        // without anyone writing it down; this asks whether it can shrink — which for a
+        // published package is the breaking change, not the addition. A removal is also the
+        // change with the least to see in a source diff: the member is simply gone, and the
+        // file that still promises it is a file nobody edited.
+        using Probe probe = new(
+            description: RealDescription,
+            source: DocumentedPublicTypeMinusAMember,
+            declaredApi: NothingDeclared,
+            shippedApi: BridgeDeclared);
+
+        PackResult result = probe.Build();
+
+        Assert.False(result.Succeeded, $"Build should have failed but succeeded:\n{result.Output}");
+
+        // The code for a recorded member that is no longer there, rather than any failure: a
+        // project that could not restore fails a build too, and RS0016 — the code every other
+        // case here matches — would mean the opposite thing had gone wrong.
+        Assert.Contains("RS0017", result.Output, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void The_analyzer_that_pins_the_surface_is_not_shipped_to_a_consumer()
     {
         // Every project under src/ references it, and a package reference is a consumer's
@@ -428,9 +486,12 @@ public sealed class PackagingContractTests
         /// <summary>
         /// <paramref name="declaredApi"/> is the whole of <c>PublicAPI.Unshipped.txt</c>, header
         /// included; null means the project has neither baseline file, which is a state worth
-        /// probing rather than one to avoid. <paramref name="withShippedApi"/> exists only for the
-        /// case about a half-written baseline — every real project has both files, and the shipped
-        /// one is always empty here because nothing has been published from this repository.
+        /// probing rather than one to avoid. <paramref name="shippedApi"/> is the same for
+        /// <c>PublicAPI.Shipped.txt</c> and defaults to an empty surface, which is where every
+        /// project here starts — nothing has been published from this repository, so a case that
+        /// records something in it is describing a release that has not happened yet.
+        /// <paramref name="withShippedApi"/> exists only for the case about a half-written
+        /// baseline; every real project has both files.
         /// </summary>
         public Probe(
             string? description,
@@ -439,6 +500,7 @@ public sealed class PackagingContractTests
             string? source = null,
             string? exemptWarning = null,
             string? declaredApi = null,
+            string? shippedApi = null,
             bool withShippedApi = true)
         {
             Root = Path.Combine(Path.GetTempPath(), $"rendlio-pack-{Guid.NewGuid():N}");
@@ -525,7 +587,7 @@ public sealed class PackagingContractTests
                 if (withShippedApi)
                 {
                     File.WriteAllText(
-                        Path.Combine(Root, "PublicAPI.Shipped.txt"), NothingDeclared);
+                        Path.Combine(Root, "PublicAPI.Shipped.txt"), shippedApi ?? NothingDeclared);
                 }
             }
         }
