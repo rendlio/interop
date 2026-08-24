@@ -34,6 +34,16 @@ internal static class RepositoryLayout
         ".editorconfig", ".gitattributes", ".gitignore", "LICENSE",
     ];
 
+    /// <summary>
+    /// Committed, but written by a tool rather than by a person. A restore lock is derived
+    /// from Directory.Packages.props the way build output is derived from the sources, and it
+    /// is mostly base64 content hashes — random text long enough that a scan for a short
+    /// forbidden word would eventually hit one by chance, on a regeneration nobody could
+    /// review. The lock is checked by <c>BuildContractTests</c>, which asks the question that
+    /// actually applies to it: that one exists for every project in the solution.
+    /// </summary>
+    private static readonly string[] GeneratedFileNames = ["packages.lock.json"];
+
     private static readonly Lazy<DirectoryInfo> LazyRoot = new(FindRoot);
 
     public static DirectoryInfo Root => LazyRoot.Value;
@@ -50,7 +60,10 @@ internal static class RepositoryLayout
         return File.ReadAllText(path);
     }
 
-    /// <summary>Every file this repository publishes, as absolute paths.</summary>
+    /// <summary>
+    /// Every file this repository publishes that a person wrote, as absolute paths. Generated
+    /// files are left out — see <see cref="GeneratedFileNames"/>.
+    /// </summary>
     public static IReadOnlyList<string> EnumerateShippedFiles()
     {
         List<string> files = [];
@@ -89,8 +102,9 @@ internal static class RepositoryLayout
         || PrunedRelativePaths.Contains(Describe(directory.FullName), StringComparer.OrdinalIgnoreCase);
 
     private static bool IsShipped(string fileName) =>
-        ShippedFileNames.Contains(fileName, StringComparer.OrdinalIgnoreCase)
-        || ShippedExtensions.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase);
+        !GeneratedFileNames.Contains(fileName, StringComparer.OrdinalIgnoreCase)
+        && (ShippedFileNames.Contains(fileName, StringComparer.OrdinalIgnoreCase)
+            || ShippedExtensions.Contains(Path.GetExtension(fileName), StringComparer.OrdinalIgnoreCase));
 
     private static DirectoryInfo FindRoot()
     {

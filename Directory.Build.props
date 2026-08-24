@@ -22,6 +22,18 @@
     <ContinuousIntegrationBuild Condition=" '$(CI)' == 'true' ">true</ContinuousIntegrationBuild>
   </PropertyGroup>
 
+  <PropertyGroup Label="Restore">
+    <!-- Why: rule 3 says an upstream range covers the certified versions and nothing else,
+         and a range is by definition satisfiable by more than one version. Without a lock the
+         range is a promise kept by whoever happens to restore; with one, restore writes down
+         the graph it resolved and CI replays that graph in locked mode, so an upstream that
+         drifted inside a range without a certification run fails the restore instead of
+         quietly entering a build. Changing a dependency on purpose means regenerating the
+         lock with a force-evaluate restore and committing it. See "Version pinning" in
+         README.md. -->
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+  </PropertyGroup>
+
   <PropertyGroup Label="Packaging">
     <!-- Nothing packs unless it opts in. src/Directory.Build.props turns this back on, so a
          project can only ship by being placed under src/. -->

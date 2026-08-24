@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using Xunit;
 
@@ -7,12 +8,19 @@ namespace Rendlio.Interop.Conventions.Tests;
 /// Pins the build settings the README promises a consumer. Each one is a published claim —
 /// that warnings are errors, that a package can only ship from <c>src/</c>, that an
 /// undocumented public member fails the build, that an upstream is always the published
-/// package. Turning one off is a change to what this repository promises, so it should show
-/// up as a failing test rather than as a quiet edit to a props file.
+/// package, that a range resolves to the graph its lock records. Turning one off is a change
+/// to what this repository promises, so it should show up as a failing test rather than as a
+/// quiet edit to a props file.
 /// </summary>
-public sealed class BuildContractTests
+public sealed partial class BuildContractTests
 {
     private const string NuGetOrg = "https://api.nuget.org/v3/index.json";
+
+    private const string LockFileName = "packages.lock.json";
+
+    private const string SolutionFileName = "Rendlio.Interop.slnx";
+
+    private const string WorkflowPath = ".github/workflows/ci.yml";
 
     [Theory]
     [InlineData("Nullable", "enable")]
@@ -76,9 +84,71 @@ public sealed class BuildContractTests
         Assert.Equal([NuGetOrg], configured);
     }
 
+    [Fact]
+    public void Restore_writes_down_the_versions_a_range_resolved_to()
+    {
+        // Rule 3 constrains a range, and a range is satisfiable by more than one version.
+        // The lock is what turns that constraint into a fact on disk that a reviewer can see.
+        Assert.Equal("true", Property("Directory.Build.props", "RestorePackagesWithLockFile"));
+    }
+
+    [Fact]
+    public void Every_project_in_the_solution_commits_its_lock()
+    {
+        string[] projects = [.. SolutionProjects()];
+
+        // Guards the assertion below. An empty project list would satisfy it while checking
+        // nothing, which is how this claim would go quiet without anyone noticing.
+        Assert.NotEmpty(projects);
+
+        string[] unlocked =
+        [
+            .. projects.Where(project => !File.Exists(Path.Combine(
+                Path.GetDirectoryName(Path.Combine(RepositoryLayout.Root.FullName, project))
+                    ?? RepositoryLayout.Root.FullName,
+                LockFileName))),
+        ];
+
+        Assert.True(
+            unlocked.Length == 0,
+            $"These projects restore without a committed {LockFileName}, so nothing records "
+            + $"what their ranges resolved to: {string.Join(", ", unlocked)}. Regenerate with "
+            + "a force-evaluate restore and commit what it writes.");
+    }
+
+    [Fact]
+    public void Ci_restores_against_the_committed_lock()
+    {
+        string workflow = RepositoryLayout.ReadFile(WorkflowPath);
+
+        // Guards the assertion below: a workflow that had stopped restoring altogether would
+        // contain no unlocked restore either, and would pass without enforcing anything.
+        Assert.Contains("dotnet restore", workflow, StringComparison.Ordinal);
+
+        Assert.False(
+            UnlockedRestorePattern().IsMatch(workflow),
+            $"'{WorkflowPath}' restores without locked mode. Restore then resolves the ranges "
+            + "afresh, and an upstream that drifted inside one enters the build unreviewed.");
+    }
+
+    /// <summary>The projects the solution builds, as repository-relative paths.</summary>
+    private static IEnumerable<string> SolutionProjects() =>
+        XDocument.Parse(RepositoryLayout.ReadFile(SolutionFileName))
+            .Descendants("Project")
+            .Select(project => project.Attribute("Path")?.Value ?? string.Empty)
+            .Where(path => path.Length > 0);
+
     private static string? Property(string relativePath, string name) =>
         Document(relativePath).Descendants(name).FirstOrDefault()?.Value.Trim();
 
     private static XDocument Document(string relativePath) =>
         XDocument.Parse(RepositoryLayout.ReadFile(relativePath));
+
+    /// <summary>
+    /// A restore that is not held to the lock. The whitespace is loose on purpose: YAML is
+    /// free to fold a command across lines, and a restore that lost the flag by being
+    /// reformatted is the same defect as one that never had it.
+    /// </summary>
+    [GeneratedRegex(@"dotnet\s+restore(?!\s+--locked-mode\b)")]
+    private static partial Regex UnlockedRestorePattern();
 }

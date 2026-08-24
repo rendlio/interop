@@ -75,6 +75,22 @@ public sealed partial class PublicSurfaceRulesTests
     }
 
     [Fact]
+    public void The_scan_does_not_reach_a_generated_lock()
+    {
+        // A restore lock is committed and public, but it is written by restore and is mostly
+        // base64 content hashes. Scanning that much random text for a three-letter forbidden
+        // word finds one by coincidence sooner or later, on a regeneration nobody authored
+        // and nobody can edit — a failure that would say nothing about what this repository
+        // publishes. The claim a lock does have to satisfy, that one exists for every project
+        // in the solution, is asserted in BuildContractTests.
+        IEnumerable<string> names = RepositoryLayout.EnumerateShippedFiles()
+            .Select(RepositoryLayout.Describe);
+
+        Assert.DoesNotContain(names, name =>
+            name.EndsWith("packages.lock.json", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void Shipped_pages_do_not_disclose_how_fidelity_is_measured()
     {
         AssertAbsent(
