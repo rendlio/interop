@@ -20,6 +20,7 @@ adapter landing here has to follow.
 | `src/` | Adapter packages, one project per upstream library (`Rendlio.Interop.*`), each with the `README.md` that becomes its package page and the two `PublicAPI` files that record its public surface. |
 | `tests/` | Test projects. |
 | `tools/` | Tooling run from a checkout, never packed — see [Rendlio.Interop.Sweep](tools/Rendlio.Interop.Sweep/README.md). |
+| `docs/` | Specifications that bind what may land here — see the [adapter API specification](docs/adapter-api.md), which fixes the surface every `Rendlio.Interop.*` package exposes. |
 | `Directory.Build.props` | Shared build settings: nullable enabled, warnings as errors. |
 | `Directory.Solution.props` | What a solution build needs settled before any project loads — see the file for why an inherited `Platform` would otherwise stop one. |
 | `Directory.Packages.props` | Central package versions — where rule 3 is enforced. |
@@ -117,6 +118,11 @@ and committing the `packages.lock.json` files it rewrites alongside the range th
 
 ## Contributing
 
+- An adapter's public surface is not decided in the pull request that adds it. The [adapter API
+  specification](docs/adapter-api.md) fixes it in advance — the entry points and their overloads,
+  the options record, the return shape, the pre-save recalculation default, and the exception each
+  failure raises — so that two adapters over different upstreams read the same way. Read it before
+  writing one; where it is silent, it says so and does not leave you to guess.
 - One adapter package per upstream library, with tests.
 - Public members carry XML documentation. `GenerateDocumentationFile` is on for everything
   under `src/` and warnings are errors, so an undocumented public member fails the build.
