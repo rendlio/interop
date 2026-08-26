@@ -66,7 +66,17 @@ public sealed partial class SecurityPolicyTests
         // rules for why a vulnerability is still not repaired in a private copy. A reader who
         // follows a dead link gets the assertion without the authority, and a renamed heading
         // breaks it silently.
-        foreach ((string target, string anchor) in LinksFrom(Policy))
+        List<(string Target, string Anchor)> links = LinksFrom(Policy).ToList();
+
+        // Guards the loop below, which reports that every link resolves whether it examined
+        // three of them or none. Empty means one of two things and both are failures: the page
+        // stopped pointing at the pages it borrows its authority from, or it still points and
+        // the pattern stopped recognising the shape — a reference-style link, a target the
+        // character class does not cover. It is the same guard PublicSurfaceRulesTests keeps
+        // over its own scan, for the same reason.
+        Assert.NotEmpty(links);
+
+        foreach ((string target, string anchor) in links)
         {
             Assert.True(
                 File.Exists(Path.Combine(RepositoryLayout.Root.FullName, target)),
