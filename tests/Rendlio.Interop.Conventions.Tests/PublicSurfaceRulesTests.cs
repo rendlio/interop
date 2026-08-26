@@ -225,6 +225,16 @@ public sealed partial class PublicSurfaceRulesTests
             "A shipped page carries commercial terms. Everything in this repository is MIT.");
     }
 
+    [Fact]
+    public void Shipped_pages_never_call_anything_open_source()
+    {
+        AssertNoMatch(
+            RepositoryLayout.EnumerateShippedFiles(),
+            OpenSourceClaimPattern(),
+            "A shipped page calls something \"open source\". The rendering engine is "
+            + "source-available; an upstream is described by naming the licence it carries.");
+    }
+
     /// <summary>
     /// Prose and code only: everything shipped except the files whose job is to name paths —
     /// see <see cref="PathNamingConfiguration"/>. Excluded by role rather than by shape,
@@ -312,6 +322,34 @@ public sealed partial class PublicSurfaceRulesTests
 
         Assert.True(clean, $"{rule}{Environment.NewLine}{string.Join(Environment.NewLine, offenders)}");
     }
+
+    /// <summary>
+    /// A licence claim this repository may not make. The rendering engine is BUSL-licensed,
+    /// so calling it "open source" is not a loose synonym but a false statement about a
+    /// licence, published to the audience that cares about the difference most.
+    /// <para>
+    /// Banned outright rather than only where it sits near "Rendlio" or "engine" — decided,
+    /// not inherited. The phrase is legitimate about an upstream, and ClosedXML and MiniExcel
+    /// genuinely are one; but scoping the match cannot tell the two apart on these pages. The
+    /// prose is hard-wrapped, so a claim and its subject routinely sit on different lines,
+    /// and a sentence naming an upstream alongside Rendlio is the ordinary shape of a
+    /// sentence in an adapter repository — so a scope would have to be either wide enough to
+    /// catch the upstream or narrow enough to miss the engine. A gate that guesses which noun
+    /// a claim attaches to cannot be trusted in either direction. The outright ban costs an
+    /// author nothing they need: naming the upstream's licence — "ClosedXML is MIT-licensed"
+    /// — says strictly more than the phrase does, and is what README.md and
+    /// UPSTREAM-PATCHES.md already do across every upstream they discuss without once
+    /// reaching for it.
+    /// </para>
+    /// <para>
+    /// A pattern rather than one more literal term, because the two words come apart: a wrap
+    /// puts a line break between them and emphasis puts a marker there. A literal search
+    /// reads both as clean, which is how the README-only assertion this replaces could have
+    /// been satisfied by the very sentence it existed to stop.
+    /// </para>
+    /// </summary>
+    [GeneratedRegex(@"\bopen[-\s*`]+source", RegexOptions.IgnoreCase)]
+    private static partial Regex OpenSourceClaimPattern();
 
     [GeneratedRegex(@"\bwi-[0-9a-f]{8}\b", RegexOptions.IgnoreCase)]
     private static partial Regex TrackedItemIdPattern();

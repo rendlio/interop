@@ -206,16 +206,17 @@ public sealed partial class UpstreamPatchPolicyTests
     }
 
     [Fact]
-    public void The_disclosure_calls_the_engine_source_available_and_never_open_source()
+    public void The_disclosure_calls_the_engine_source_available()
     {
-        // The engine is BUSL-licensed, so the other term is not a synonym — it is a false
-        // claim about a licence, made to an audience that cares about the difference more
-        // than any other. The README is held to this too; the page that carries the wording
-        // abroad has to be held to it separately.
-        string prose = Prose(Policy);
-
-        Assert.Contains("source-available", prose, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("open source", prose, StringComparison.OrdinalIgnoreCase);
+        // The engine is BUSL-licensed, and this paragraph is the one that gets pasted into
+        // somebody else's issue tracker, so it has to carry the accurate term itself rather
+        // than lean on the README carrying it.
+        //
+        // The matching half of the rule — that the inaccurate term never appears — moved to
+        // PublicSurfaceRulesTests, which holds it over every published page rather than this
+        // one, and matches through the line break or the emphasis marker that the literal
+        // search standing here would have read as clean.
+        Assert.Contains("source-available", Prose(Policy), StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>The named section, up to the next heading, as comparable prose.</summary>

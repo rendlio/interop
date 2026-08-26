@@ -39,14 +39,19 @@ public sealed class RepositoryRulesTests
     }
 
     [Fact]
-    public void Readme_calls_the_engine_source_available_and_never_open_source()
+    public void Readme_calls_the_engine_source_available()
     {
-        // The rendering engine is BUSL-licensed. "open source" would be inaccurate, so
-        // "source-available" is the term used, and the wrong one must not creep back in.
-        string readme = RepositoryLayout.ReadFile("README.md");
-
-        Assert.Contains("source-available", readme, StringComparison.OrdinalIgnoreCase);
-        Assert.DoesNotContain("open source", readme, StringComparison.OrdinalIgnoreCase);
+        // The rendering engine is BUSL-licensed, and this is the page that has to say so.
+        //
+        // The matching half of the rule — that the inaccurate term never appears — is no
+        // longer asserted here. It holds for every page this repository publishes now, in
+        // PublicSurfaceRulesTests, which reaches further than this page and is also the only
+        // file allowed to quote the phrase in order to search for it. Repeating it here
+        // would put the phrase into a shipped file and redden the wider rule.
+        Assert.Contains(
+            "source-available",
+            RepositoryLayout.ReadFile("README.md"),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
