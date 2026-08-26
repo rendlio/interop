@@ -20,7 +20,7 @@ public sealed partial class BuildContractTests
 
     private const string SolutionFileName = "Rendlio.Interop.slnx";
 
-    private const string WorkflowPath = ".github/workflows/ci.yml";
+    private const string WorkflowDirectory = ".github/workflows";
 
     [Theory]
     [InlineData("Nullable", "enable")]
@@ -119,17 +119,38 @@ public sealed partial class BuildContractTests
     [Fact]
     public void Ci_restores_against_the_committed_lock()
     {
-        string workflow = RepositoryLayout.ReadFile(WorkflowPath);
+        // Every workflow, not just the one that restores today. The lock is only binding
+        // because CI refuses to resolve a range afresh, so a second workflow added later
+        // that restored without the flag would be a way back out of rule 3 — and it would
+        // be added by whoever needed a second workflow, not by whoever wrote this rule.
+        (string Name, string Text)[] workflows = [.. Workflows()];
 
-        // Guards the assertion below: a workflow that had stopped restoring altogether would
-        // contain no unlocked restore either, and would pass without enforcing anything.
-        Assert.Contains("dotnet restore", workflow, StringComparison.Ordinal);
+        // Guards the assertion below. No workflow at all, or none that restores, satisfies
+        // "none of them restores unlocked" while enforcing nothing.
+        Assert.NotEmpty(workflows);
+        Assert.Contains(workflows, workflow =>
+            workflow.Text.Contains("dotnet restore", StringComparison.Ordinal));
 
-        Assert.False(
-            UnlockedRestorePattern().IsMatch(workflow),
-            $"'{WorkflowPath}' restores without locked mode. Restore then resolves the ranges "
-            + "afresh, and an upstream that drifted inside one enters the build unreviewed.");
+        string[] unlocked =
+        [
+            .. workflows
+                .Where(workflow => UnlockedRestorePattern().IsMatch(workflow.Text))
+                .Select(workflow => workflow.Name),
+        ];
+
+        Assert.True(
+            unlocked.Length == 0,
+            $"These workflows restore without locked mode: {string.Join(", ", unlocked)}. "
+            + "Restore then resolves the ranges afresh, and an upstream that drifted inside "
+            + "one enters the build unreviewed.");
     }
+
+    /// <summary>Every CI workflow, as a repository-relative path and its text.</summary>
+    private static IEnumerable<(string Name, string Text)> Workflows() =>
+        Directory
+            .EnumerateFiles(Path.Combine(RepositoryLayout.Root.FullName, WorkflowDirectory), "*.y*ml")
+            .Order(StringComparer.Ordinal)
+            .Select(path => (RepositoryLayout.Describe(path), File.ReadAllText(path)));
 
     /// <summary>The projects the solution builds, as repository-relative paths.</summary>
     private static IEnumerable<string> SolutionProjects() =>
