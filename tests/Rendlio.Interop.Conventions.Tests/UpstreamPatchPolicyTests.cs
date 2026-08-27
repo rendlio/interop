@@ -41,7 +41,7 @@ public sealed class UpstreamPatchPolicyTests
     /// something about every link the page publishes, so a page that published none would
     /// satisfy it while checking nothing — which is what a rewrite that dropped both links, or
     /// moved them to reference style (<c>[rule 2][fork-rules]</c>, which
-    /// <see cref="RelativeLinkPattern"/> does not match), would quietly do. The page argues by
+    /// <see cref="MarkdownPage.LinksFrom"/> misses), would quietly do. The page argues by
     /// pointing, so losing the links costs it the authority it argues from — the exact failure
     /// the test below was written to prevent, arriving by the one route that test cannot see.
     ///
@@ -51,7 +51,7 @@ public sealed class UpstreamPatchPolicyTests
     [Fact]
     public void The_policy_publishes_the_two_links_it_argues_from()
     {
-        List<(string Target, string Anchor)> links = LinksFrom(Policy).ToList();
+        List<(string Target, string Anchor)> links = MarkdownPage.LinksFrom(Policy).ToList();
 
         Assert.Contains(("SUPPORT.md", string.Empty), links);
         Assert.Contains(("README.md", "2-fork-rules"), links);
