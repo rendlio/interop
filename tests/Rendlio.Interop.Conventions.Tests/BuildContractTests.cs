@@ -31,6 +31,11 @@ public sealed class BuildContractTests
         Assert.Equal("false", Property("Directory.Build.props", "IsPackable"));
         Assert.Equal("true", Property("src/Directory.Build.props", "IsPackable"));
         Assert.Equal("false", Property("tests/Directory.Build.props", "IsPackable"));
+
+        // Restated under tools/ rather than left to the default. A tool is run from a
+        // checkout, and one that started shipping to consumers by accident would be a change
+        // to what this repository publishes.
+        Assert.Equal("false", Property("tools/Directory.Build.props", "IsPackable"));
     }
 
     [Fact]

@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Target framework and the test stack come from tests/Directory.Build.props. -->
+
+  <PropertyGroup>
+    <RootNamespace>Rendlio.Interop.Sweep.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../tools/Rendlio.Interop.Sweep/Rendlio.Interop.Sweep.csproj" />
+  </ItemGroup>
+
+</Project>

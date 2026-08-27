@@ -1,0 +1,17 @@
+<Project>
+
+  <!-- MSBuild stops at the nearest Directory.Build.props, so the repository-wide one
+       has to be chained in explicitly. -->
+  <Import Project="$(MSBuildThisFileDirectory)../Directory.Build.props" />
+
+  <PropertyGroup>
+    <!-- Restated rather than inherited. Nothing under tools/ is a package a consumer
+         installs, and a tool that started shipping by accident would be a change to what
+         this repository publishes. BuildContractTests pins this line for that reason. -->
+    <IsPackable>false</IsPackable>
+    <!-- Tools run from a checkout, never from a consumer's project, so they track the SDK
+         pinned in global.json rather than any package's target frameworks. -->
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+</Project>

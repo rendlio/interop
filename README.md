@@ -19,6 +19,7 @@ adapter landing here has to follow.
 | --- | --- |
 | `src/` | Adapter packages, one project per upstream library (`Rendlio.Interop.*`). |
 | `tests/` | Test projects. |
+| `tools/` | Tooling run from a checkout, never packed — see [Rendlio.Interop.Sweep](tools/Rendlio.Interop.Sweep/README.md). |
 | `Directory.Build.props` | Shared build settings: nullable enabled, warnings as errors. |
 | `Directory.Packages.props` | Central package versions — where rule 3 is enforced. |
 | `NuGet.config` | Restore resolves from nuget.org only, so an upstream is always the published package. |

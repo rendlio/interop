@@ -107,6 +107,19 @@ public sealed class PrivateTreePolicyTests
         Assert.StartsWith($"{IgnoreFile}:", source, StringComparison.Ordinal);
     }
 
+    [Fact]
+    public void Git_ignores_what_a_watch_run_records()
+    {
+        // The other half of the same rule. A run under tools/ reads public registries and
+        // writes down what it saw; that record is working evidence for whoever reads it, and
+        // this repository is not where evidence gets published. The default output path is
+        // inside the checkout, so the ignore rule is again the whole defence.
+        (int verdict, string source) = IgnoreQuery("sweep-runs/candidates.jsonl");
+
+        Assert.Equal(Ignored, verdict);
+        Assert.StartsWith($"{IgnoreFile}:", source, StringComparison.Ordinal);
+    }
+
     /// <summary>
     /// The rules git evaluates: commentary and blank lines dropped, surrounding whitespace
     /// and line endings left out of it so a reformat of the file is not a failure.

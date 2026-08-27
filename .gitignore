@@ -40,3 +40,8 @@ Thumbs.db
 
 # Private working notes - this repository is public, so they stay out of its history
 .conductor/
+
+# What a watch run records. The ledger and its reports are working evidence for whoever
+# reads them, not content this repository publishes, so they stay out of its history too.
+*.jsonl
+sweep-runs/

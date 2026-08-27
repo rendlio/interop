@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Target framework and the no-packaging rule come from tools/Directory.Build.props. -->
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <RootNamespace>Rendlio.Interop.Sweep</RootNamespace>
+    <AssemblyName>Rendlio.Interop.Sweep</AssemblyName>
+    <!-- Types here are reached from the test project, not from a package, so they carry
+         documentation by house style rather than by build failure. -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+</Project>

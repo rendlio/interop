@@ -1,5 +1,9 @@
 <Solution>
   <Folder Name="/tests/">
     <Project Path="tests/Rendlio.Interop.Conventions.Tests/Rendlio.Interop.Conventions.Tests.csproj" />
+    <Project Path="tests/Rendlio.Interop.Sweep.Tests/Rendlio.Interop.Sweep.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Rendlio.Interop.Sweep/Rendlio.Interop.Sweep.csproj" />
   </Folder>
 </Solution>
