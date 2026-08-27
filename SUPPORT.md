@@ -97,9 +97,14 @@ Pull requests, which are declined with the reason rather than left open:
 
 ## Security
 
-A suspected vulnerability is not an ordinary issue: do not open a public one. Report it
-privately through this repository's **Security** tab (*Report a vulnerability*), which
-reaches the maintainers without disclosing the problem to everyone else first.
+A suspected vulnerability is not an ordinary issue: do not open a public one describing it.
+Report it privately through this repository's **Security** tab (*Report a vulnerability*),
+which reaches the maintainers without disclosing the problem to everyone else first.
+
+If that route is not offered, open an ordinary issue that says only that you have a security
+report and asks where to send it — no detail, no reproduction, no file. An issue that says
+nothing more than that discloses nothing, and it comes back with somewhere private to send
+the rest. A missing button is never a reason to publish the details.
 
 ## The rules still decide
 
